@@ -1,0 +1,22 @@
+# Python environment and caches
+.venv/
+__pycache__/
+*.py[cod]
+
+# Build output (the installer is published on GitHub Releases)
+build/
+dist/
+installer_output/
+*.spec
+
+# Manuscripts, paper material and archives (not part of the application code)
+*.docx
+*.pdf
+Paper_bahan/
+_arsip_ketidakpastian/
+imp/
+
+# Other
+*.log
+selftest.log
+.claude/
