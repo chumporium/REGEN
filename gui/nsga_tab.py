@@ -448,6 +448,8 @@ def draw_compare(fig, project, cmp, kind, opts=None):
             ax.scatter(ya, yb, marker="*", s=300, facecolor="white", edgecolor=col, lw=1.5, zorder=5)
             ax.annotate("", (ya, yb), (Y[i, a], Y[i, b]),
                         arrowprops={"arrowstyle": "->", "color": col, "lw": 1, "ls": "--"}, zorder=4)
+        ax.scatter([], [], marker="*", s=200, facecolor="white", edgecolor="#555", lw=1.2,
+                   label="TOPSIS choice predicted\nby the other model")
         ax.set_xlabel(f"{names[a]} ({_goal_word(act[a])})")
         ax.set_ylabel(f"{names[b]} ({_goal_word(act[b])})")
         ax.set_title("RSM front vs ANN front" + (f" (2D projection of {m} objectives)" if m > 2 else "")
