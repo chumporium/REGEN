@@ -394,16 +394,31 @@ def compare_html(project, cmp):
     drop_r = hv[("rsm", "rsm")] - hv[("rsm", "ann")]
     drop_a = hv[("ann", "ann")] - hv[("ann", "rsm")]
     h.append("<h3>Conclusion</h3><ul>")
-    if dmean < 5 and cmp["dx"] < 15:
+    # check D: mean difference below 5% for every objective and compromise choices less than 15% of the range apart;
+    # name the criterion that failed, so the message matches the rating
+    diff_ok, dist_ok = dmean < 5, cmp["dx"] < 15
+    diff_txt = (f"the largest mean difference of the predictions on the front is {dmean:.1f}%, "
+                + ("within the 5% limit" if diff_ok else "above the 5% limit"))
+    dist_txt = (f"the compromise choices are {cmp['dx']:.0f}% of the factor range apart, "
+                + ("within the 15% limit" if dist_ok else "above the 15% limit"))
+    if diff_ok and dist_ok:
         h.append("<li class='good'>Both models agree: predictions on the front differ by only "
                  f"{dmean:.1f}% on average and the compromise choices are close together. The optimization result "
                  "does not depend on the choice of model.</li>")
     elif dmean < 10:
-        h.append(f"<li class='warn'>The models agree reasonably well (mean difference up to {dmean:.1f}%), but the "
-                 f"compromise choices are {cmp['dx']:.0f}% of the factor range apart. The front is flat in that "
-                 "region: several settings give similar results.</li>")
+        if not diff_ok and not dist_ok:
+            why = (f"{diff_txt[0].upper() + diff_txt[1:]}, and {dist_txt}. Make confirmation runs at both TOPSIS "
+                   "points.")
+        elif not diff_ok:
+            why = (f"{diff_txt[0].upper() + diff_txt[1:]}, while {dist_txt}. Check the region where the differences "
+                   "are largest before relying on the front there.")
+        else:
+            why = (f"{diff_txt[0].upper() + diff_txt[1:]}, but {dist_txt}. The front is flat in that region: several "
+                   "settings give similar results.")
+        h.append(f"<li class='warn'>The models agree only partly. {why}</li>")
     else:
-        h.append(f"<li class='bad'>The models differ considerably (mean difference up to {dmean:.1f}%). Do not rely "
+        h.append(f"<li class='bad'>The models differ considerably: the largest mean difference of the predictions on "
+                 f"the front is {dmean:.1f}%, above the 10% limit for partial agreement, and {dist_txt}. Do not rely "
                  "on just one model: make confirmation runs at both TOPSIS points.</li>")
     better = "ANN" if hv[("ann", "ann")] > hv[("rsm", "rsm")] else "RSM"
     h.append(f"<li>According to each model, the {better} front promises a better trade-off "

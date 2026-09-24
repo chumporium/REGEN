@@ -7,6 +7,8 @@ Versions 1 to 6 were developed under the name DOE Studio.
 - The user interface, reports and source code are in English.
 - `.doe` project files and the recent-files list of earlier versions are still read; the installer replaces
   DOE Studio.
+- ANN vs RSM front comparison: the conclusion names the criterion that was not met (mean prediction difference
+  or distance between the compromise choices) and states the limits used.
 
 ## 6.9
 - Measurement uncertainty features removed; the noise level for ANN diagnosis is taken from pure error.
