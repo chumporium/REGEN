@@ -1,0 +1,26 @@
+{
+  "title": "REGEN: Response Engineering with GEnetic algorithms and Neural networks",
+  "upload_type": "software",
+  "description": "REGEN is a Windows desktop application for design of experiments: experimental design, response surface methodology (RSM), artificial neural networks (ANN), and multi-objective optimization (NSGA-II and NSGA-III) in one project. It implements a framework with four diagnostic checks: cross-validated selection of the ANN architecture, a learning curve for data sufficiency, a hypervolume-based stopping rule, and a cross-prediction of the ANN and RSM Pareto fronts.",
+  "creators": [
+    {
+      "name": "Munandar, Erdiyanto",
+      "affiliation": "Department of Mechanical Engineering, Faculty of Engineering, Universitas Indonesia"
+    },
+    {
+      "name": "Nasruddin",
+      "affiliation": "Department of Mechanical Engineering, Faculty of Engineering, Universitas Indonesia"
+    }
+  ],
+  "license": "MIT",
+  "keywords": [
+    "design of experiments",
+    "response surface methodology",
+    "artificial neural networks",
+    "multi-objective optimization",
+    "NSGA-II",
+    "NSGA-III",
+    "Pareto front",
+    "learning curve"
+  ]
+}

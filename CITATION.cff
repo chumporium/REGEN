@@ -1,0 +1,19 @@
+cff-version: 1.2.0
+message: "If you use REGEN, please cite it as below."
+title: "REGEN: Response Engineering with GEnetic algorithms and Neural networks"
+type: software
+version: 7.0.0
+date-released: 2026-09-24
+license: MIT
+repository-code: "https://github.com/chumporium/REGEN"
+authors:
+  - family-names: Munandar
+    given-names: Erdiyanto
+    affiliation: "Department of Mechanical Engineering, Faculty of Engineering, Universitas Indonesia"
+  - family-names: Nasruddin
+    affiliation: "Department of Mechanical Engineering, Faculty of Engineering, Universitas Indonesia"
+keywords:
+  - design of experiments
+  - response surface methodology
+  - artificial neural networks
+  - multi-objective optimization
