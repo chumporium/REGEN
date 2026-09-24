@@ -46,7 +46,7 @@ A Windows desktop application for design of experiments (DOE): experimental desi
 
 **Artificial neural networks**
 - Any number of hidden layers and neurons; Levenberg-Marquardt, Bayesian regularization, or Adam for large
-  networks; normalization from the training data only.
+  networks; scaling limits from the training and validation data, never from the test data.
 - Automatic architecture search (cross-validation, early stopping on the number of neurons and layers,
   one-standard-error rule, underfitting/overfitting diagnosis).
 - Learning curve for data sufficiency, separate or multi-output models, parallel training on several CPU cores.
