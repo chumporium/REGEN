@@ -28,7 +28,7 @@ from .readiness_tab import ReadinessTab
 from .report import write_excel, write_pdf
 
 APP_NAME = "REGEN"
-APP_FULL = "Regression, Experimental design, GEnetic optimisation and Neural networks"
+APP_FULL = "Response Engineering with GEnetic algorithms and Neural networks"
 SETTINGS_KEY = "DOE Studio"      # old name: keeps the recent-projects list readable
 APP_VERSION = "7.0.0"
 FILE_FILTER = "REGEN Project (*.doe)"

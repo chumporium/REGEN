@@ -3,7 +3,7 @@
 Versions 1 to 6 were developed under the name DOE Studio.
 
 ## 7.0.0
-- The application is renamed REGEN (Regression, Experimental design, GEnetic optimisation and Neural networks).
+- The application is renamed REGEN (Response Engineering with GEnetic algorithms and Neural networks).
 - The user interface, reports and source code are in English.
 - `.doe` project files and the recent-files list of earlier versions are still read; the installer replaces
   DOE Studio.

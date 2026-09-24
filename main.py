@@ -1,4 +1,4 @@
-"""REGEN (Regression, Experimental design, GEnetic optimisation and Neural networks) - application entry point."""
+"""REGEN (Response Engineering with GEnetic algorithms and Neural networks) - application entry point."""
 import os
 import sys
 

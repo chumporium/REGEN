@@ -1,6 +1,6 @@
 # REGEN
 
-**R**egression, **E**xperimental design, **GE**netic optimisation and **N**eural networks
+**R**esponse **E**ngineering with **GE**netic algorithms and **N**eural networks
 
 A Windows desktop application for design of experiments (DOE): experimental design, response surface methodology
 (RSM), artificial neural networks (ANN) and multi-objective optimization in one project.
