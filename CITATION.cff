@@ -4,8 +4,16 @@ title: "REGEN: Response Engineering with GEnetic algorithms and Neural networks"
 type: software
 version: 7.0.0
 date-released: 2026-09-24
+doi: 10.5281/zenodo.22944177
 license: MIT
 repository-code: "https://github.com/chumporium/REGEN"
+identifiers:
+  - type: doi
+    value: 10.5281/zenodo.22944177
+    description: "Version 7.0.0"
+  - type: doi
+    value: 10.5281/zenodo.22944176
+    description: "All versions (resolves to the latest)"
 authors:
   - family-names: Munandar
     given-names: Erdiyanto

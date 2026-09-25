@@ -1,5 +1,7 @@
 # REGEN
 
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.22944176.svg)](https://doi.org/10.5281/zenodo.22944176)
+
 **R**esponse **E**ngineering with **GE**netic algorithms and **N**eural networks
 
 A Windows desktop application for design of experiments (DOE): experimental design, response surface methodology
@@ -129,6 +131,14 @@ from those versions can still be opened.
 
 Erdiyanto Munandar and Nasruddin (corresponding author), Department of Mechanical Engineering, Faculty of
 Engineering, Universitas Indonesia, Depok, Indonesia.
+
+## How to cite
+
+Munandar, E., and Nasruddin. 2026. REGEN: Response Engineering with GEnetic algorithms and Neural networks,
+version 7.0.0. Zenodo. https://doi.org/10.5281/zenodo.22944177
+
+The DOI 10.5281/zenodo.22944176 always resolves to the latest version. Citation metadata is also available in
+`CITATION.cff` (GitHub: *Cite this repository*).
 
 ## License
 
