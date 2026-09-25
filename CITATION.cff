@@ -17,8 +17,10 @@ identifiers:
 authors:
   - family-names: Munandar
     given-names: Erdiyanto
+    orcid: "https://orcid.org/0009-0001-4123-7827"
     affiliation: "Department of Mechanical Engineering, Faculty of Engineering, Universitas Indonesia"
   - family-names: Nasruddin
+    orcid: "https://orcid.org/0000-0002-5289-0039"
     affiliation: "Department of Mechanical Engineering, Faculty of Engineering, Universitas Indonesia"
 keywords:
   - design of experiments
