@@ -1,4 +1,4 @@
-"""Import an existing data set (paste from Excel / Design-Expert, or open an Excel/CSV file)."""
+"""Import an existing data set (paste from Excel or another DOE program, or open an Excel/CSV file)."""
 import csv
 import io
 import math
@@ -22,7 +22,7 @@ ROLES = [("factor", "Numeric factor"), ("categoric", "Categoric factor"), ("comp
 ROLE_LABEL = dict(ROLES)
 ROLE_COLOR = {"factor": "#e3edf9", "categoric": "#f3e8fd", "component": "#e6f4ea", "response": "#fff4d6",
               "ignore": "#eeeeee"}
-# header names of bookkeeping columns (English, Indonesian, and Design-Expert style)
+# header names of bookkeeping columns (English, Indonesian, and the style of other DOE programs)
 IGNORE_NAMES = re.compile(r"^(std|run|no\.?|nomor|number|order|urutan|id|block|blok|#)$", re.I)
 
 
@@ -116,7 +116,7 @@ class ImportDialog(QDialog):
         self.raw = []         # data rows (without header)
 
         root = QVBoxLayout(self)
-        info = QLabel("<b>Import existing data.</b> 1) Copy the data from Excel / Design-Expert / another source. "
+        info = QLabel("<b>Import existing data.</b> 1) Copy the data from Excel or another DOE program. "
                       "2) Click <b>Paste from Clipboard</b> (or <b>Open File</b>). 3) Right-click rows to delete "
                       "rows you do not need. 4) Right-click a <b>column header</b> to mark it as Factor / Response "
                       "(or select a column and set it in the right panel).")
@@ -247,7 +247,7 @@ class ImportDialog(QDialog):
         self.cols = []
         for j in range(ncol):
             name = head[j] if header and head[j] else f"Column {j + 1}"
-            de_response = bool(re.match(r"^R\d+\s*:", name))      # Design-Expert format "R1: Name (units)"
+            de_response = bool(re.match(r"^R\d+\s*:", name))      # response header "R1: Name (units)" used by other DOE programs
             unit = ""
             m = re.match(r"^(?:[A-Z]:\s*|R\d+:\s*)?(.*?)\s*[\(\[]([^\)\]]*)[\)\]]\s*$", name)
             if m:
