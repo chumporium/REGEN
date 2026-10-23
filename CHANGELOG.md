@@ -2,7 +2,8 @@
 
 Versions 1 to 6 were developed under the name DOE Studio.
 
-## Unreleased
+## 7.1.0
+- User manual (PDF, Help > User Manual or F1) that explains every page with its theory and worked examples.
 Sensitivity & Parametric Study (new page under Optimization)
 - Reference point: design center, best desirability solution, NSGA TOPSIS choice or knee point, or custom
   values; model: the selected model of each response, RSM or ANN.

@@ -3,7 +3,7 @@
 ; The AppId is the same as in the earlier DOE Studio versions, so this installer replaces them.
 
 #define AppName "REGEN"
-#define AppVersion "7.0.0"
+#define AppVersion "7.1.0"
 #define AppExe "REGEN.exe"
 
 [Setup]

@@ -2,9 +2,9 @@ cff-version: 1.2.0
 message: "If you use REGEN, please cite it as below."
 title: "REGEN: Response Engineering with GEnetic algorithms and Neural networks"
 type: software
-version: 7.0.0
-date-released: 2026-09-24
-doi: 10.5281/zenodo.22944177
+version: 7.1.0
+date-released: 2026-10-23
+doi: 10.5281/zenodo.22944176
 license: MIT
 repository-code: "https://github.com/chumporium/REGEN"
 identifiers:

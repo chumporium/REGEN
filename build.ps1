@@ -25,12 +25,16 @@ if (Get-Command pdflatex -ErrorAction SilentlyContinue) {
 }
 if (-not (Test-Path $manual)) { throw "User manual not found: $manual (install a LaTeX distribution with pdflatex)" }
 
+# data file of scipy's Sobol sequence (not found by PyInstaller's analysis)
+$sobol = & $py -c "import os, scipy.stats; print(os.path.join(os.path.dirname(scipy.stats.__file__), '_sobol_direction_numbers.npz'))"
+
 Write-Host "Running PyInstaller..."
 & $py -m PyInstaller --noconfirm --clean --windowed `
     --name "REGEN" `
     --icon assets\icon.ico `
     --add-data "assets;assets" `
     --add-data "$manual;docs" `
+    --add-data "$sobol;scipy\stats" `
     --exclude-module tkinter `
     --exclude-module PySide6.QtWebEngineCore `
     --exclude-module PySide6.QtWebEngineWidgets `

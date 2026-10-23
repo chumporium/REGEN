@@ -229,7 +229,9 @@ def self_test(out_dir):
         sob = sensitivity.sobol(sp, np.zeros(sp.k), n=1024, n_boot=20)["results"][0]
         src = sensitivity.regression_significance(sp, np.zeros(sp.k), n=120)["results"][0]
         tor = sensitivity.tornado(sp, np.zeros(sp.k))["results"][0]
-        assert np.all(sob["ST"] >= -0.05) and len(src["beta"]) == sp.k and len(tor) == sp.k
+        # indices outside 0..1 point to a broken Sobol sequence (e.g. scipy data file missing in the build)
+        assert np.all((sob["ST"] > -0.05) & (sob["ST"] < 1.05) & (sob["S1"] > -0.1) & (sob["S1"] < 1.05)), sob
+        assert len(src["beta"]) == sp.k and len(tor) == sp.k
         lines.append(f"sensitivity: Sobol ST {np.round(sob['ST'], 2).tolist()}, beta "
                      f"{[round(b, 2) for b in src['beta']]} (R2 {src['r2']:.2f}) OK")
         with open(log, "w", encoding="utf-8") as fh:
