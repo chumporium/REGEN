@@ -9,9 +9,9 @@ from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg, NavigationToolb
 from matplotlib.figure import Figure  # noqa: E402
 from PySide6.QtCore import QAbstractTableModel, QModelIndex, Qt, QThread, Signal  # noqa: E402
 from PySide6.QtGui import QBrush, QColor  # noqa: E402
-from PySide6.QtWidgets import QVBoxLayout, QWidget  # noqa: E402
+from PySide6.QtWidgets import QMenu, QVBoxLayout, QWidget  # noqa: E402
 
-from . import theme  # noqa: E402
+from . import plotdata, theme  # noqa: E402
 
 theme.apply_matplotlib()
 
@@ -87,7 +87,7 @@ def p_class(p, alpha=0.05):
 
 
 class MplCanvas(QWidget):
-    """Matplotlib canvas widget with a toolbar (zoom, pan, save image)."""
+    """Matplotlib canvas widget with a toolbar (zoom, pan, save image) and export of the plotted data."""
 
     def __init__(self, parent=None, toolbar=True, figsize=(6, 4)):
         super().__init__(parent)
@@ -97,8 +97,34 @@ class MplCanvas(QWidget):
         lay.setContentsMargins(0, 0, 0, 0)
         self.toolbar = NavigationToolbar2QT(self.canvas, self) if toolbar else None
         if toolbar:
+            self.toolbar.addSeparator()
+            a = self.toolbar.addAction("Copy data", self.copy_data)
+            a.setToolTip("Copy the data behind this plot to the clipboard (paste into Excel)")
+            a = self.toolbar.addAction("Export data...", self.export_data)
+            a.setToolTip("Save the data behind this plot as an Excel workbook (one sheet per series) or a CSV file")
             lay.addWidget(self.toolbar)
         lay.addWidget(self.canvas)
+        self.canvas.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.canvas.customContextMenuRequested.connect(self._menu)
+
+    def _menu(self, pos):
+        if self.toolbar is not None and str(getattr(self.toolbar, "mode", "")):
+            return  # right-click belongs to zoom/pan while one of them is active
+        m = QMenu(self)
+        m.addAction("Copy plot data", self.copy_data)
+        m.addAction("Export plot data...", self.export_data)
+        m.exec(self.canvas.mapToGlobal(pos))
+
+    def data_tables(self):
+        return plotdata.figure_tables(self.figure)
+
+    def copy_data(self):
+        from .copying import system_decimal, to_clipboard
+        to_clipboard(plotdata.tables_to_rows(self.data_tables()), system_decimal())
+
+    def export_data(self):
+        titles = [ax.get_title() for ax in self.figure.axes if ax.get_title()]
+        plotdata.export_dialog(self, self.data_tables(), (titles[0] if titles else "plot") + " data")
 
     def clear(self):
         self.figure.clear()

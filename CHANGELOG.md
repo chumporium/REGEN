@@ -3,6 +3,14 @@
 Versions 1 to 6 were developed under the name DOE Studio.
 
 ## Unreleased
+Data export
+- Every plot has "Copy data" and "Export data..." (toolbar and right-click): the data behind each panel are
+  written to the clipboard, an Excel workbook (one sheet per series) or a CSV file, so the plot can be redrawn
+  elsewhere. Contour, surface, overlay, desirability and POE plots export the full grid in actual units with the
+  plotted values; confidence bands and box plots export their underlying values.
+- Every result table has "Export table..." (Excel or CSV), and every report panel has "Export all tables..." (one
+  sheet per table).
+
 Design and data
 - New Design: random seed option; the same seed gives the same run order and the same optimal, Latin
   hypercube and hybrid designs. The seed is saved with the project and shown on the Summary page.

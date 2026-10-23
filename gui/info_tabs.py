@@ -12,7 +12,7 @@ from scipy import stats
 
 from doe import designs, models
 
-from . import plots, theme
+from . import plotdata, plots, theme
 from .common import REPORT_CSS, MplCanvas, fmt
 from .copying import ReportBrowser
 
@@ -402,6 +402,8 @@ class GraphColumnsTab(QWidget):
             idx = np.clip(np.searchsorted(edges, x, side="right") - 1, 0, 4)
             groups = [y[idx == k] for k in range(5)]
             labels = [f"{fmt(edges[k], 3)}–{fmt(edges[k + 1], 3)}" for k in range(5)]
+        plotdata.register(ax, "Values per group", [xname, yname],
+                          [[lab, float(v)] for lab, g in zip(labels, groups) for v in g], only=True)
         bp = ax.boxplot(groups, patch_artist=True, widths=0.55)
         for box in bp["boxes"]:
             box.set_facecolor(theme.PLOT_COLORS[0])

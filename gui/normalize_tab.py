@@ -7,7 +7,7 @@ from PySide6.QtWidgets import (QCheckBox, QComboBox, QFileDialog, QHBoxLayout, Q
 
 from doe import ann
 
-from . import theme
+from . import plotdata, theme
 from .common import ArrayModel, MplCanvas, fmt
 from .copying import install_table_copy
 
@@ -163,6 +163,8 @@ class NormalizeTab(QWidget):
         for ax, M, title in ((ax1, A, "Before normalization (original units)"),
                              (ax2, Z, f"After normalization - {ann.NORMS[method].split(' - ')[0]}")):
             data = [M[np.isfinite(M[:, c]), c] for c in range(M.shape[1])]
+            plotdata.register(ax, "Values per column", ["Column", "Value"],
+                              [[nm, float(v)] for nm, d in zip(names, data) for v in d], only=True)
             bp = ax.boxplot(data, patch_artist=True, widths=0.55)
             ax.set_xticks(range(1, len(short) + 1), short)
             for n, box in enumerate(bp["boxes"]):

@@ -63,11 +63,14 @@ def table_rows(table, selection_only=True, headers=True):
         rows_idx, cols_idx = list(range(model.rowCount())), list(range(model.columnCount()))
     rows_idx = [r for r in rows_idx if not table.isRowHidden(r)]
     cols_idx = [c for c in cols_idx if not table.isColumnHidden(c)]
+    vlab = [str(model.headerData(r, Qt.Vertical, Qt.DisplayRole) or "") for r in rows_idx]
+    # row labels are kept when they carry information (not just 1, 2, 3, ...)
+    rowhead = headers and table.verticalHeader().isVisible() and any(v != str(r + 1) for v, r in zip(vlab, rows_idx))
     out = []
     if headers:
-        out.append([str(model.headerData(c, Qt.Horizontal, Qt.DisplayRole) or "") for c in cols_idx])
-    for r in rows_idx:
-        out.append([cell(r, c) for c in cols_idx])
+        out.append([""] * rowhead + [str(model.headerData(c, Qt.Horizontal, Qt.DisplayRole) or "") for c in cols_idx])
+    for r, v in zip(rows_idx, vlab):
+        out.append([v] * rowhead + [cell(r, c) for c in cols_idx])
     return out
 
 
@@ -93,10 +96,29 @@ def install_table_copy(table):
             act = QAction(label, m)
             act.triggered.connect(lambda _=False, sel=sel, head=head, s=s: to_clipboard(table_rows(table, sel, head), s))
             m.addAction(act)
+        m.addSeparator()
+        m.addAction("Export table...", lambda: export_table(table))
         m.exec(table.viewport().mapToGlobal(pos))
 
     table.customContextMenuRequested.connect(menu)
     return table
+
+
+def export_table(table, title=None):
+    """Save the whole table (Excel or CSV); numeric cells are written as numbers."""
+    from . import plotdata
+    rows = table_rows(table, False, True)
+    title = title or table.window().windowTitle() or "Table"
+    data = [[_value(c) for c in r] for r in rows[1:]]
+    plotdata.export_dialog(table, [(title, rows[0] if rows else [], data)], title)
+
+
+def _value(text):
+    t = _clean(text)
+    try:
+        return float(t) if _NUM.match(t) and not t.endswith("%") else t
+    except ValueError:
+        return t
 
 
 # ------------------------------------------------------------------ HTML reports
@@ -187,4 +209,16 @@ class ReportBrowser(QTextBrowser):
         a2.triggered.connect(lambda: self.copy_tables(other))
         m.addAction(a1)
         m.addAction(a2)
+        m.addSeparator()
+        m.addAction("Export all tables...", self.export_tables)
         m.exec(event.globalPos())
+
+    def export_tables(self):
+        from . import plotdata
+        tables = []
+        for n, (title, table) in enumerate(html_tables(self._html), 1):
+            rows = [[html_mod.unescape(c) for c in r] for r in table]
+            if rows:
+                tables.append((html_mod.unescape(title) or f"Table {n}", rows[0], [[_value(c) for c in r] for r in rows[1:]]))
+        first = tables[0][0] if tables else "tables"
+        plotdata.export_dialog(self, tables, first)

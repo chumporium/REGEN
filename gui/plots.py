@@ -8,6 +8,7 @@ from scipy import stats
 from doe import designs, models
 from doe.optimize import overall_desirability
 
+from . import plotdata
 from .common import fmt
 
 BLUE = "#1f5f99"
@@ -428,6 +429,19 @@ class Grid:
             return self._clip(ax, ax.tricontour(self.tri, Z, levels=levels, **kw))
         return self._clip(ax, ax.contour(self.AX, self.AY, self.masked(Z), levels=levels, **kw))
 
+    def _actual_columns(self, coded):
+        act = self.p.to_actual(np.atleast_2d(coded))
+        return {self.p.factor_label(i): act[:, i] for i in self.axes}
+
+    def register(self, ax, values, title="Grid"):
+        """Attach the grid (factor values in actual units) and the plotted values for data export."""
+        cols = self._actual_columns(self.pts)
+        cols["Inside region (1 = yes)"] = self.ok.astype(int)
+        cols.update({k: np.asarray(v, float).ravel() for k, v in values.items()})
+        others = [i for i in range(self.p.k) if i not in self.axes]
+        fixed = ", ".join(f"{self.p.factor_label(i)} = {fmt(float(self.p.to_actual(self.base)[i]), 4)}" for i in others)
+        plotdata.register_columns(ax, title + (f" ({fixed})" if fixed else ""), cols, only=True)
+
     def xy(self, coded):
         coded = np.atleast_2d(coded)
         if self.tern:
@@ -519,6 +533,9 @@ class Grid:
         sub = pts[:, self.axes]
         uniq, idx, counts = np.unique(np.round(sub, 6), axis=0, return_index=True, return_counts=True)
         x, y = self.xy(pts[idx])
+        cols = self._actual_columns(pts[idx])
+        cols["Number of runs"] = counts
+        plotdata.register_columns(ax, "Design points in this slice", cols)
         big = len(x) > 300
         ax.scatter(x, y, color="red", edgecolor="none" if big else "white", s=msize(len(x), 40), zorder=5,
                    clip_on=False, rasterized=big)
@@ -533,6 +550,7 @@ class Grid:
         if not self.slice_mask(coded, tol=2e-2)[0]:
             return
         x, y = self.xy(coded)
+        plotdata.register_columns(ax, label, self._actual_columns(coded))
         ax.scatter(x, y, marker="*", s=260, color="#ffd400", edgecolor="k", zorder=7)
         ax.annotate(label, (x[0], y[0]), textcoords="offset points", xytext=(8, -12), fontsize=9,
                     fontweight="bold")
@@ -548,6 +566,7 @@ def draw_response_2d(fig, project, fit, axes, base, resp_label, kind="contour", 
     Z = fit.predict(grid.pts)
     if kind == "contour":
         ax = fig.add_subplot(111)
+        grid.register(ax, {resp_label: Z})
         grid.decorate(ax)
         cf = grid.fill(ax, Z, levels)
         cs = grid.lines(ax, Z, levels, colors="k", linewidths=0.5)
@@ -557,6 +576,7 @@ def draw_response_2d(fig, project, fit, axes, base, resp_label, kind="contour", 
         grid.mark(ax, mark)
     else:
         ax = fig.add_subplot(111, projection="3d")
+        grid.register(ax, {resp_label: Z})
         if grid.tern:
             surf = ax.plot_trisurf(grid.tri, Z, cmap="viridis", edgecolor="none", alpha=0.92)
             ax.plot([0, 1, 0.5, 0], [0, 0, H, 0], [np.nanmin(Z)] * 4, color="k", lw=1)
@@ -574,6 +594,9 @@ def draw_response_2d(fig, project, fit, axes, base, resp_label, kind="contour", 
         m = grid.slice_mask(coded)
         if m.any():
             x, y = grid.xy(coded[m])
+            cols = grid._actual_columns(coded[m])
+            cols[f"{resp_label} (observed)"] = fit.y_orig[m]
+            plotdata.register_columns(ax, "Design points in this slice", cols)
             ax.scatter(x, y, fit.y_orig[m], color="red", s=25, depthshade=False)
         ax.set_zlabel(resp_label)
     ax.set_title(resp_label)
@@ -628,6 +651,8 @@ def draw_oneway(fig, project, fit, xi, base, resp_label):
         ax.plot(xa, yhat, color=BLUE, lw=2, label="Predicted")
         if fit.df_resid > 0:
             lo, hi = fit.confidence_band(pts)
+            plotdata.register_columns(ax, "95% confidence interval", {project.factor_label(xi): xa, "Lower": lo,
+                                                                       "Upper": hi})
             ax.fill_between(xa, lo, hi, color=BLUE, alpha=0.15, label="95% confidence interval")
         if len(pts_d):
             ax.scatter(project.factor_to_actual(xi, pts_d[:, xi]), yv, color="red", s=30, zorder=5,
@@ -660,6 +685,8 @@ def draw_all_factors(fig, project, fit, base, resp_label):
             xa = project.factor_to_actual(xi, g)
             ax.plot(xa, yhat, color=col, lw=2)
             if ci:
+                plotdata.register_columns(ax, "95% confidence interval", {project.factor_label(xi): xa, "Lower": lo,
+                                                                           "Upper": hi})
                 ax.fill_between(xa, lo, hi, color=col, alpha=0.15)
             ax.axvline(project.factor_to_actual(xi, base[xi]), color="#94a3b8", ls=":", lw=1)
         ax.set_xlabel(project.factor_label(xi), fontsize=9)
@@ -782,14 +809,18 @@ def draw_overlay(fig, project, items, axes, base, mark=None):
     ax = fig.add_subplot(111)
     grid.decorate(ax)
     good = grid.ok.copy()
+    values = {}
     for n, (lab, fit, lo, hi) in enumerate(items):
         Z = fit.predict(grid.pts)
+        values[f"{lab} (limits {fmt(lo, 4)} to {fmt(hi, 4)})"] = Z
         good &= (Z >= lo) & (Z <= hi)
         col = COLORS[n % len(COLORS)]
         for lim, name in ((lo, "lower"), (hi, "upper")):
             if np.nanmin(Z) < lim < np.nanmax(Z):
                 cs = grid.lines(ax, Z, levels=[lim], colors=[col], linewidths=1.8)
                 grid.clabel(ax, cs, fmt=lambda v, lab=lab: f"{lab}: {fmt(v, 4)}", fontsize=8)
+    values["Meets all criteria (1 = yes)"] = good.astype(int)
+    grid.register(ax, values)
     grid.fill(ax, good.astype(float), levels=[-0.5, 0.5, 1.5], colors=["#e4e7eb", "#ffe066"], alpha=0.95,
               zorder=0.5)
     if not grid.tern and grid.poly is not None:
@@ -813,6 +844,7 @@ def draw_desirability(fig, project, criteria, axes, base, levels=12, mark=None):
     ax = fig.add_subplot(111)
     grid.decorate(ax)
     D = overall_desirability(grid.pts, criteria)
+    grid.register(ax, {"Desirability": D})
     lv = np.linspace(0, 1, levels + 1)
     cf = grid.fill(ax, D, lv, cmap="RdYlGn")
     cs = grid.lines(ax, D, lv[1:-1], colors="k", linewidths=0.5)
@@ -862,6 +894,7 @@ def draw_poe(fig, project, fit, axes, base, resp_label, levels=12, mark=None):
         return
     Z = models.poe(fit, grid.pts, project.sd_coded())
     ax = fig.add_subplot(111)
+    grid.register(ax, {f"POE {resp_label}": Z})
     grid.decorate(ax)
     cf = grid.fill(ax, Z, levels, cmap="magma_r")
     cs = grid.lines(ax, Z, levels, colors="k", linewidths=0.5)

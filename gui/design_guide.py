@@ -231,6 +231,7 @@ class DesignGuideDialog(QDialog):
         self.grid.setSelectionMode(QTableWidget.SingleSelection)
         self.grid.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         self.grid.verticalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        install_table_copy(self.grid)
         bold = QFont()
         bold.setBold(True)
         for r, n in enumerate(runs):

@@ -8,7 +8,7 @@ from PySide6.QtWidgets import (QCheckBox, QComboBox, QDoubleSpinBox, QFormLayout
 
 from doe import adequacy, ann, parallel
 
-from . import plots, theme
+from . import plotdata, plots, theme
 from .common import REPORT_CSS, MplCanvas, Task, fmt
 from .copying import ReportBrowser
 
@@ -526,6 +526,8 @@ def draw_learning(fig, project, j, lc):
     n = np.array(lc["sizes"])
     r2 = 1 - np.array(lc["ann"])
     lo, hi = 1 - np.array(lc["ann_hi"]), 1 - np.array(lc["ann_lo"])
+    plotdata.register_columns(ax, "ANN test R², interquartile range", {"Training runs": n, "Lower quartile": lo,
+                                                                       "Upper quartile": hi})
     ax.fill_between(n, lo, hi, color=plots.BLUE, alpha=0.15, lw=0)
     ax.plot(n, r2, "o-", color=plots.BLUE, lw=2, label="ANN: test R²")
     ax.plot(n, 1 - np.array(lc["ann_train"]), "--", color=plots.BLUE, lw=1, alpha=0.7, label="ANN: training R²")
