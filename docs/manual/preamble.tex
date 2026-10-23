@@ -1,0 +1,40 @@
+% Shared preamble of the REGEN user manual (also used to test single chapters).
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{lmodern}
+\usepackage{textcomp}
+\usepackage{amsmath,amssymb,bm}
+\usepackage{graphicx}
+\graphicspath{{figures/}}
+\usepackage{booktabs,longtable,array,tabularx}
+\usepackage[margin=25mm]{geometry}
+\usepackage[round,authoryear]{natbib}
+\usepackage{xcolor}
+\usepackage{enumitem}
+\usepackage[hidelinks]{hyperref}
+\usepackage{newunicodechar}
+\newunicodechar{°}{\textdegree}
+\newunicodechar{±}{\ensuremath{\pm}}
+\newunicodechar{²}{\ensuremath{^2}}
+\newunicodechar{³}{\ensuremath{^3}}
+\newunicodechar{×}{\ensuremath{\times}}
+\newunicodechar{≤}{\ensuremath{\le}}
+\newunicodechar{≥}{\ensuremath{\ge}}
+\newunicodechar{σ}{\ensuremath{\sigma}}
+\newunicodechar{ρ}{\ensuremath{\rho}}
+\newunicodechar{β}{\ensuremath{\beta}}
+\newunicodechar{λ}{\ensuremath{\lambda}}
+\newunicodechar{Δ}{\ensuremath{\Delta}}
+\newunicodechar{α}{\ensuremath{\alpha}}
+\newunicodechar{μ}{\ensuremath{\mu}}
+\newunicodechar{−}{\ensuremath{-}}
+\newunicodechar{–}{--}
+
+% user-interface labels (pages, buttons, menu items, options) and menu paths
+\newcommand{\ui}[1]{\textsf{#1}}
+\newcommand{\menupath}[1]{\textsf{#1}}
+% short boxed hint
+\newenvironment{hint}{\begin{quote}\small\textbf{Hint.}~}{\end{quote}}
+
+\setlist{itemsep=2pt,topsep=4pt}
+\setlength{\parskip}{3pt}

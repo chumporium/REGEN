@@ -1,0 +1,437 @@
+\chapter{Troubleshooting and Frequently Asked Questions}\label{chap:12}
+\label{ch:trouble}
+
+This chapter collects the messages that REGEN can show, explains why they appear and what to do. Messages are
+quoted as the program shows them; parts in angle brackets (such as $\langle$name$\rangle$) are filled in with the
+actual factor, response or number. The last sections answer common questions about reproducibility, speed and
+installation.
+
+\section{Installation, starting and files}
+\label{sec:ch12-files}
+
+{\small\begin{longtable}{@{}p{0.38\linewidth}p{0.58\linewidth}@{}}
+\caption{Installation and file messages.}\label{tab:ch12-files}\\
+\toprule
+Message or problem & Cause and what to do \\
+\midrule
+\endfirsthead
+\toprule
+Message or problem & Cause and what to do \\
+\midrule
+\endhead
+\bottomrule
+\endfoot
+``Windows protected your PC'' when the installer starts &
+Windows SmartScreen warns about a downloaded program that is not code-signed. Check that the file is the REGEN
+installer from the GitHub Releases page, click \ui{More info} and then \ui{Run anyway}
+(Section~\ref{sec:ch02-install}). \\
+\addlinespace
+The installer asks for administrator rights &
+\ui{Install for all users} was chosen. Choose \ui{Install for me only}, which needs no administrator rights. \\
+\addlinespace
+Double-clicking a \texttt{.doe} file does not open REGEN &
+The file association was not selected during installation. Run the installer again and tick \ui{Open .doe files
+with REGEN}, or open the file with \menupath{File $\rightarrow$ Open\dots}. \\
+\addlinespace
+``Open Failed: The file could not be opened: $\langle$error$\rangle$'' &
+The file is not a REGEN/DOE Studio project, it was damaged (for example cut off while copying, or edited by hand
+and no longer valid JSON), or it is locked by another program. Open a backup copy; the error text names the
+problem (for example the line of a JSON error). \\
+\addlinespace
+``Save Failed: $\langle$error$\rangle$'' &
+The folder is read-only, the disk is full, or the file is open in another program (for example a cloud-sync
+client). Save to another folder with \ui{Save As\dots}. \\
+\addlinespace
+``Export Failed'' / ``PDF Export Failed'' &
+The target file is open in another program (an Excel workbook or PDF viewer keeps the file locked) or the folder is
+not writable. Close the file or choose another name. \\
+\addlinespace
+``Export data: The file could not be written: $\langle$error$\rangle$'' &
+Same as above, for \ui{Export data\dots}, \ui{Export table\dots} and \ui{Export all tables\dots}. \\
+\addlinespace
+``Export data: There are no data to export.'' &
+The plot or panel is empty (for example a message is shown instead of a plot). \\
+\addlinespace
+A project opens without the last NSGA result or search table &
+Results larger than 5 million characters (for example a very large Pareto history) are not stored in the file, and
+projects saved by older versions contain no results. Run the analysis again. \\
+\addlinespace
+``User Manual: The user manual (REGEN\_User\_Manual.pdf) was not found next to the program\dots'' &
+The PDF manual is missing from the installation folder. Reinstall REGEN or download the manual from the Releases
+page. \\
+\end{longtable}}
+
+\section{New design and import}
+\label{sec:ch12-design}
+
+{\small\begin{longtable}{@{}p{0.38\linewidth}p{0.58\linewidth}@{}}
+\caption{Messages when creating a design or importing data.}\label{tab:ch12-design}\\
+\toprule
+Message & Cause and what to do \\
+\midrule
+\endfirsthead
+\toprule
+Message & Cause and what to do \\
+\midrule
+\endhead
+\bottomrule
+\endfoot
+``Factor $\langle$name$\rangle$: Low must be less than High.'' / ``The limits of $\langle$name$\rangle$ are not
+numbers.'' & Correct the factor table. Decimal comma and point are both accepted. \\
+\addlinespace
+``The sum of the component lower limits must be less than the total.'' &
+In a mixture the lower limits must leave room for the components to vary: $\sum L_i < T$. Lower some limits or
+raise the mixture total. \\
+\addlinespace
+``Categorical factor $\langle$name$\rangle$ needs at least 2 distinct levels.'' &
+Separate the level names with semicolons (or commas), for example \texttt{Ethanol; Methanol}. \\
+\addlinespace
+``Constraint: Line $\langle i\rangle$: A constraint must use <= or >=.'' and similar &
+A linear constraint could not be read. Write one constraint per line with factor letters, numbers and \texttt{<=}
+or \texttt{>=}, for example \texttt{A + B <= 160} or \texttt{2A - C >= 0}. Constraints may not contain categoric
+factors, and only letters of existing factors (``Factor 'X' does not exist (use letters A–C).''). \\
+\addlinespace
+``The design region is empty: the bounds and constraints contradict each other.'' &
+No point satisfies all limits and constraints at the same time. Relax a constraint or widen a factor range. \\
+\addlinespace
+``There are not enough candidate points to estimate this model. Relax the constraints or choose a simpler model.'' &
+Optimal designs choose runs from a candidate set; in a small constrained region the set cannot support all model
+coefficients. Use a lower-order planned model or relax the constraints. \\
+\addlinespace
+``Box-Behnken requires at least 3 factors.'', ``DSD is available for 3–20 factors.'', ``PB with $N$ runs allows at
+most $N-1$ factors.'', ``$\langle$array$\rangle$ allows at most $m$ factors.'' &
+The chosen design type does not exist for this number of factors. Choose another type or size (the Design Guide
+lists the valid choices). \\
+\addlinespace
+``Split-plot: Enter the letters of the hard-to-change factors (e.g. A).'' &
+The split-plot option is ticked but no hard-to-change factor is given. \\
+\addlinespace
+\ui{Augment Design\dots} is greyed out; tooltip ``Augmenting split-plot designs is not supported: the new runs would
+need their own whole plots. Create a new split-plot design instead.'' &
+Split-plot designs cannot be augmented. Create a larger split-plot design, or add runs suggested by Data Readiness
+(each new run becomes its own whole plot). \\
+\addlinespace
+``Import: The clipboard is empty. Copy a data table first.'' &
+Nothing was copied, or the copied content is not text. Copy the cells again in Excel. \\
+\addlinespace
+``Mark at least one Factor column and one Response column.'' &
+Set the column roles by right-clicking the column headers (Section~\ref{sec:ch02-import}). \\
+\addlinespace
+``Factor $\langle$name$\rangle$ is constant / empty - mark it as Ignore.'' &
+A factor must take at least two different values. Constant columns carry no information for a model. \\
+\addlinespace
+``Column $\langle$name$\rangle$, row $i$ is not a number: '$\langle$value$\rangle$'.'' &
+A cell of a numeric column contains text (such as ``n/a'' or a unit). Delete the row, clear the cell before
+copying, or mark the column as categoric. Cells shown in red are the ones that will fail. \\
+\addlinespace
+``$\langle$name$\rangle$ has $L$ levels - should this column be numeric or ignored?'' &
+A text column with more than 20 different values was marked as a categoric factor. It is probably an identifier
+(mark it \ui{Ignore}) or a numeric column with some text cells. \\
+\addlinespace
+``Mixture components cannot be combined with process factors when importing data.\dots'' &
+An import is either a process or a mixture data set. Mark all factor columns as components, or none. \\
+\addlinespace
+``In $n$ rows the components do not sum to the total $T$. Continue (those rows are still analyzed)?'' &
+Check \ui{Mixture total}; it is set to the median row sum. Small rounding differences are harmless; large ones
+indicate a wrong column or a wrong total. \\
+\addlinespace
+``Sum of component minimums ≥ total - check the mixture total.'' &
+The lower limits taken from the data leave no room for variation. Check the total and the component columns. \\
+\addlinespace
+Numbers such as 1,234 are read as 1.234 &
+A comma alone is read as a decimal comma. Remove thousands separators before copying. \\
+\end{longtable}}
+
+\section{Data, analysis and graphs}
+\label{sec:ch12-analysis}
+
+{\small\begin{longtable}{@{}p{0.38\linewidth}p{0.58\linewidth}@{}}
+\caption{Messages on the data, analysis and graph pages.}\label{tab:ch12-analysis}\\
+\toprule
+Message & Cause and what to do \\
+\midrule
+\endfirsthead
+\toprule
+Message & Cause and what to do \\
+\midrule
+\endhead
+\bottomrule
+\endfoot
+``The model cannot be computed yet'' with ``Fill in at least 3 complete rows (factors + response) to start the
+analysis.'' & The response has fewer than 3 runs with complete factor settings and a response value (excluded runs
+do not count). Enter more data. \\
+\addlinespace
+``Residual degrees of freedom = 0 (saturated model). Statistical tests cannot be computed - remove model terms or
+add runs.'' &
+The model has as many coefficients as there are runs, so no error estimate exists. Choose a lower-order model,
+remove terms, or add runs (Data Readiness suggests D-optimal runs). Design Evaluation shows the degrees of freedom
+before any run is made. \\
+\addlinespace
+``Aliased terms (removed automatically): $\langle$terms$\rangle$'' &
+These terms cannot be estimated separately from terms earlier in the model (for example a cubic term in a
+Box-Behnken design, or interactions in a resolution III fraction). They are dropped from the model; the Fit Summary
+marks such orders ``Aliased''. Use a design of higher resolution, add runs (augmentation, foldover) or use a
+lower-order model. \\
+\addlinespace
+``No model is significant compared with the mean.'' &
+None of the model orders explains the response better than its mean (sequential $p \ge 0.05$). The factors may
+have no effect in the studied range, the noise may be large, or the ranges may be too narrow. \\
+\addlinespace
+``The square root transform requires all response values ≥ 0.'' / ``The $\langle$transform$\rangle$ transform
+requires all response values > 0.'' &
+Set \ui{Constant k (y + k)} so that $y+k$ is positive, or choose another transformation. \\
+\addlinespace
+``The Box-Cox plot needs all values of y + k > 0 (and at least 3 data points).'' / ``Box-Cox is not available for
+this response.'' &
+Box-Cox needs positive values and is only available for ordinary least squares (not for logistic, Poisson or
+split-plot models). \\
+\addlinespace
+``No effect exceeds the ME limit.'' &
+Lenth's automatic selection found no effect larger than the margin of error. Inspect the half-normal plot; select
+terms by clicking if there is a clear break. \\
+\addlinespace
+``The GLM fit has warnings - see the GLM (Logistic/Poisson) tab.'' &
+The IRLS fit did not converge, or fitted probabilities are numerically 0 or 1 (complete or quasi-complete
+separation; for Poisson: fitted means 0). Standard errors, tests and odds ratios are then not reliable. Remove terms
+or add runs where the response changes. \\
+\addlinespace
+``A binomial response must be a number of successes between 0 and $m$ (number of trials).'' / ``A Poisson
+response (counts) cannot be negative.'' &
+Check the response type and \ui{Trials per run} in \ui{Factor \& Response Info\dots}, and the data. \\
+\addlinespace
+``Whole-plot df = 0: hard-to-change factor effects cannot be tested properly. Add more whole plots (replicates).'' &
+In a split-plot design the hard-to-change factors are tested against the whole plots. With too few whole plots no
+test is possible. \\
+\addlinespace
+``This slice lies entirely outside the design region. Change the values of the other factors/components.'' &
+With the values chosen in \ui{Other Factor Values} (or \ui{Other Components}), no point of the plotted slice
+satisfies the constraints or component bounds. Move the other factors toward the center of the region. \\
+\addlinespace
+``This graph needs more numeric factors.'' &
+The graph type needs two (contour, surface, overlay) or three (cube) numeric factors. \\
+\addlinespace
+``No criteria yet. Choose response goals and limits on the Desirability page.'' &
+Overlay and desirability contours use the goals of the Desirability page. Set at least one goal there. \\
+\addlinespace
+``Enter the factor standard deviations first (Data page $\rightarrow$ Factor \& Response Info\dots).'' &
+Propagation of error needs the standard deviation of at least one factor. \\
+\addlinespace
+``No complete runs to evaluate yet.'' (Design Evaluation) &
+All runs have missing factor settings or are excluded. \\
+\addlinespace
+``Simulation: Invalid equation: \dots'' / ``Unknown name 'x'.\dots'' &
+Use the factor letters (A, B, \dots), \texttt{+ - * / **} (or \texttt{\^{}}), and the listed functions; use a point
+as decimal separator inside an equation (commas separate the arguments of \texttt{min} and \texttt{max}). \\
+\end{longtable}}
+
+\section{Artificial neural networks}
+\label{sec:ch12-ann}
+
+{\small\begin{longtable}{@{}p{0.38\linewidth}p{0.58\linewidth}@{}}
+\caption{Messages on the ANN page.}\label{tab:ch12-ann}\\
+\toprule
+Message & Cause and what to do \\
+\midrule
+\endfirsthead
+\toprule
+Message & Cause and what to do \\
+\midrule
+\endhead
+\bottomrule
+\endfoot
+``ANN here is for continuous (normal) responses. For binomial/Poisson responses use logistic/Poisson regression on
+the RSM Analysis page.'' & ANN models are trained only for normal responses. \\
+\addlinespace
+``Too little data to train an ANN (at least 4 complete runs required).'' / ``Too little training data. Increase the
+training data percentage.'' & Enter more data or change \ui{Training data:} so that the training set is not empty. \\
+\addlinespace
+``Training + validation + test percentages must add up to 100\%.'' & Adjust the three percentages. \\
+\addlinespace
+``Early stopping requires validation data (> 0\%).'' &
+Set \ui{Validation data:} above 0, or untick early stopping. \\
+\addlinespace
+``Enter the neurons per hidden layer as numbers separated by commas. Example: 20, 10, 5'' &
+One number per hidden layer; each layer needs at least 1 neuron. \\
+\addlinespace
+``Constant response - the ANN cannot be trained.'' &
+All training values are equal; there is nothing to learn. \\
+\addlinespace
+``Only $N$ complete runs. Architecture search needs at least 8 runs.'' &
+Cross-validation needs enough runs to form folds. Use a fixed architecture or RSM. \\
+\addlinespace
+``The learning curve needs at least 12 complete runs (found $N$).'' &
+With fewer runs no learning curve can be estimated. \\
+\addlinespace
+Learning curve: ``Too little data ($N$ runs) for a reliable learning curve.'' &
+The curve was computed but $N<25$, so its extrapolation is not trusted. An ANN generally needs at least 20 to 30
+runs; use RSM. \\
+\addlinespace
+Learning curve: ``(run estimate unreliable)'' &
+The fitted power law reached the edge of the exponent range (0.2 to 2.5), its error limit is 0, or the
+interquartile range of the run estimate is very wide (upper/lower above 3). Use the curve only to decide whether
+more runs help, not how many. \\
+\addlinespace
+Status ``Overfitting'' or ``Underfitting'' &
+Overfitting: the error on new data is far above the training error; use fewer neurons, Bayesian regularization,
+or more data. Underfitting: even the training error is high; use more neurons or check the data. After an
+architecture search the headline status comes from cross-validation; the single train/test split of the final
+model is shown separately and is less reliable with few runs. \\
+\addlinespace
+Negative ANN or RSM test $R^2$ &
+With few runs a test set of 2--3 runs gives a meaningless $R^2$. Use the cross-validated $Q^2$ of the
+architecture search. A negative RSM cross-validation $R^2$ for Box-Behnken or CCD data is explained in the report:
+leaving runs out destroys the design structure; compare with the RSM predicted $R^2$. \\
+\addlinespace
+``The search was stopped before finishing; the results above are from the architectures evaluated so far.'' &
+\ui{Stop} was clicked. The table and the selection use only the finished candidates. \\
+\addlinespace
+``Architecture $\langle$layers$\rangle$ is too large for the computer's memory; adding neurons was stopped.'' /
+``A parallel process stopped unexpectedly (possibly not enough memory).'' &
+Reduce \ui{CPU cores (parallel):}, set a maximum number of neurons, or close other programs. \\
+\addlinespace
+``Large data ($N$ runs): the search uses 4000 random runs for speed; the final model is trained on all data.'' &
+Information only. \\
+\end{longtable}}
+
+\section{Optimization, sensitivity and prediction}
+\label{sec:ch12-opt}
+
+{\small\begin{longtable}{@{}p{0.38\linewidth}p{0.58\linewidth}@{}}
+\caption{Messages on the optimization, sensitivity and prediction pages.}\label{tab:ch12-opt}\\
+\toprule
+Message & Cause and what to do \\
+\midrule
+\endfirsthead
+\toprule
+Message & Cause and what to do \\
+\midrule
+\endhead
+\bottomrule
+\endfoot
+``Choose a goal (Maximize/Minimize/Target/In range) for at least one response whose model is available.'' &
+All response goals are \ui{None}, or the responses with a goal have no model yet. Set a goal in the
+\ui{Goal} column. \\
+\addlinespace
+``Skipped responses without a model: $\langle$names$\rangle$'' &
+These responses have a goal but no model (not enough data, or ANN chosen but not trained). The optimization runs
+without them. \\
+\addlinespace
+``Limits for response $\langle$name$\rangle$: lower must be < upper.'' / ``The target for $\langle$name$\rangle$
+must be between the limits.'' & Correct the limits in the criteria table. \ui{Reset Limits to Data} restores the
+data minimum and maximum. \\
+\addlinespace
+``No point satisfies all limits and constraints.'' / ``The component limits do not allow the mixture to sum to the
+total.'' &
+The factor limits on the Desirability page, the component bounds and the constraints leave no feasible point. Widen
+the factor limits. \\
+\addlinespace
+Desirability $D = 0$ for all solutions &
+At least one response cannot reach its lower limit (maximize) or upper limit (minimize) anywhere in the region.
+Relax that limit; the bar chart of a solution shows which individual $d_i$ is 0. \\
+\addlinespace
+``Select at least 2 objectives (maximize/minimize/target).'' / ``NSGA-II requires at least 2 objectives\dots'' &
+NSGA-II/III builds a Pareto front between two or more objectives. For one objective use the Desirability page. A
+row with goal \ui{Ignore} but with limits counts only as a constraint. \\
+\addlinespace
+``Enter a target value for $\langle$name$\rangle$.'' & Goal \ui{Target} needs a value in the \ui{Target} column. \\
+\addlinespace
+``The model for $\langle$name$\rangle$ is not available yet.'' & Fit the RSM model or train the ANN for that
+response first. \\
+\addlinespace
+``No feasible solution. Relax the response limits or constraints.'' &
+No solution of the final population satisfies the response limits. Widen the limits or remove some. \\
+\addlinespace
+``There is no ANN model for the objective responses yet. Train an ANN first on the ANN page (Optimize All Responses
+button).'' & \ui{Compare ANN vs RSM} needs an ANN for the objectives. \\
+\addlinespace
+``Run the optimization first.'' & \ui{Check Population Size} and \ui{Send Selected Solution to Prediction} need a
+result. \\
+\addlinespace
+``Automatic stop was not used: with NSGA-II and 4 or more objectives\dots'' &
+For NSGA-II with four or more objectives the automatic stop is switched off and all generations are run. Use
+NSGA-III (or \ui{Automatic}) for a reliable automatic stop. \\
+\addlinespace
+``Not enough generations yet\dots'' / ``Population: not sufficient\dots'' &
+Check C was not passed. Increase \ui{Max generations:} or \ui{Population:} and run again
+(Table~\ref{tab:ch01-checks}). \\
+\addlinespace
+``The models differ considerably\dots'' (red) &
+Check D: the RSM and ANN fronts disagree. Make confirmation runs at both TOPSIS points and trust the model with the
+better predictive accuracy. \\
+\addlinespace
+``Sobol indices need at least one process or categoric factor. Mixture components sum to a constant and are not
+independent inputs.'' &
+Sobol indices, standardized coefficients and the tornado chart vary independent factors only. In a pure mixture use
+the parametric study, the trace plot or the Pareto trade-off instead. \\
+\addlinespace
+``The linear constraints of the design are not applied here\dots'' &
+Sobol indices assume independent factors, so they describe the whole factor box, including points outside the
+constraints. \\
+\addlinespace
+``Too few points of the sample satisfy the design constraints.'' &
+The constrained region is too small a part of the factor box for the Latin hypercube sample. Increase
+\ui{Sample size:}. \\
+\addlinespace
+``Reference point: The reference point lies outside the design region (component bounds or constraints).\dots'' &
+Change the reference values or choose another start for the sensitivity study. \\
+\addlinespace
+``Run NSGA-II / NSGA-III on the multi-objective optimization page first.'' & The Pareto trade-off analysis needs an
+NSGA result. \\
+\addlinespace
+``The point is outside the design region - the prediction is an extrapolation.'' &
+A factor is set beyond the range of the design and of the data. Predictions there are not supported by data. \\
+\addlinespace
+``This point violates the component bounds / constraints.'' / ``The component sum does not equal the mixture
+total.'' & Correct the prediction point. \\
+\addlinespace
+Prediction shows ``-'' for the standard error, CI and PI &
+The response uses an ANN, which gives only a point prediction. Confirmation is then judged by the error as a
+percentage of the response data range (at most 5\,\%). \\
+\end{longtable}}
+
+\section{Frequently asked questions}
+\label{sec:ch12-faq}
+
+\paragraph{Why do I get a different run order every time I create the same design?}
+The run order (and the choice of points in optimal, Latin hypercube and hybrid designs) is random. The
+\ui{Random seed:} in the New Design dialog controls it: the same seed gives the same design. A new random seed is
+proposed every time the dialog opens; type a fixed number to reproduce a design. The seed is saved with the project
+and shown on the Summary page and in the PDF report.
+
+\paragraph{Are the results reproducible?}
+Yes. Every random step has a seed: the design seed, \ui{Random seed:} on the ANN page (data split, initial weights,
+cross-validation folds), \ui{Seed:} on the NSGA-II / III page, and fixed internal seeds for the desirability
+search, the region samples of Data Readiness and Design Evaluation, and the sensitivity samples. With the same data,
+settings and seeds the same numbers are obtained. ANN results do not depend on the number of CPU cores.
+
+\paragraph{The ANN gives a different result each time I click Train ANN.}
+This happens only when settings change between clicks (data, split percentages, seed, algorithm). Keep the seed
+fixed; to see how much the result depends on the initialization, change only the seed.
+
+\paragraph{The calculation is slow. What can I do?}
+For ANN work increase \ui{CPU cores (parallel):} (the default already uses all cores but one), reduce
+\ui{Restarts (initializations):} or \ui{Maximum epochs:}, or limit the number of neurons and layers of the
+architecture search. With more than 5000 runs the number of restarts of the final training is limited
+automatically, and with more than 4000 runs the architecture search uses a random subset of 4000 runs. For
+NSGA-II/III keep \ui{Stop automatically on convergence} on. For RSM, data sets with more than 400 runs are handled
+with a faster algorithm automatically; data sets with 15\,000 runs have been tested.
+
+\paragraph{The computer becomes slow while REGEN trains networks.}
+Reduce \ui{CPU cores (parallel):}. The worker processes close by themselves 90 seconds after the last calculation.
+
+\paragraph{Can I use REGEN without administrator rights?}
+Yes: choose \ui{Install for me only} during installation.
+
+\paragraph{Where is the list of recent projects stored?}
+In the Windows user settings (registry) under the old program name ``DOE Studio'', so the list of earlier versions
+is kept. Deleted or moved files are not shown.
+
+\paragraph{Can I change the factor ranges of an existing design?}
+The factor settings of a designed experiment are fixed once the design is created (the data sheet shows them in
+grey). For historical data (created with Import Data or the Historical Data design types) the factor cells can be
+edited on the Data page.
+
+\paragraph{How do I remove an outlier without deleting it?}
+Select the run on the Data page and click \ui{Exclude/Restore Runs}, or select the point on the diagnostics plots
+and click \ui{Exclude Selected Runs}. Excluded runs are left out of all models, Design Evaluation and Data
+Normalization, but stay in the data sheet and in the exports (marked ``Excluded'') and can be restored at any time.

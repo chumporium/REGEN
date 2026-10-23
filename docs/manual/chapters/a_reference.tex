@@ -1,0 +1,374 @@
+\chapter{Reference}
+\label{ch:reference}
+
+This appendix collects reference material: keyboard and mouse shortcuts, the structure of the project file, the
+constants and thresholds used by the computations, and a glossary of the terms used in this manual.
+
+\section{Keyboard and mouse shortcuts}
+\label{sec:a-keys}
+
+\begin{table}[htbp]
+\centering
+\caption{Keyboard and mouse shortcuts.}
+\label{tab:a-keys}
+\small
+\begin{tabularx}{\linewidth}{@{}lX@{}}
+\toprule
+Shortcut & Action \\
+\midrule
+Ctrl+N & \menupath{File $\rightarrow$ New Design\dots} \\
+Ctrl+O & \menupath{File $\rightarrow$ Open\dots} \\
+Ctrl+S & \menupath{File $\rightarrow$ Save} \\
+Ctrl+Shift+S & \menupath{File $\rightarrow$ Save As\dots} \\
+Alt+F4 & \menupath{File $\rightarrow$ Exit} (close REGEN) \\
+F1 & \menupath{Help $\rightarrow$ User Manual} \\
+Alt+F, Alt+V, Alt+T, Alt+H & Open the File, View, Tools or Help menu (then the underlined letter of an item) \\
+\addlinespace
+Ctrl+C & Copy the selected cells of a table (data sheet and result tables) as tab-separated text \\
+Ctrl+V & Data sheet: paste a block of cells copied from Excel, starting at the current cell (cells beyond the table
+  are ignored; decimal comma or point) \\
+Delete, Backspace & Data sheet: clear the selected editable cells \\
+\addlinespace
+Click a point & Diagnostics plots: identify the run (the same run is highlighted in all plots); half-normal and
+  normal effects plots: add the term to or remove it from the model \\
+Ctrl+click, Shift+click & Diagnostics plots: add a point to or remove it from the selection \\
+Double-click a row & Diagnostics report table: highlight the run in the plots \\
+Right-click & Plots: \ui{Copy plot data}, \ui{Export plot data\dots}; tables: copy and \ui{Export table\dots};
+  report panels: \ui{Copy all tables (for Excel)}, \ui{Export all tables\dots}; Import dialog: column roles (on a
+  header) and \ui{Delete $n$ Selected Rows} (on cells) \\
+Double-click & Start Page: open a recent project; Case Studies: open the case; Design Guide: create the selected
+  design \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\section{Project file format}
+\label{sec:a-file}
+
+A project file (\texttt{*.doe}) is a UTF-8 text file in JSON format, written with indentation so that it can be
+inspected in a text editor. Table~\ref{tab:a-file} lists the top-level fields of the current format (field
+\texttt{version} = 3). Factor settings are stored in coded units (pseudo-components for mixture components, level
+indices for categoric factors); actual values are recomputed from the factor ranges. Missing values are stored as
+\texttt{null}. Rows of \texttt{coded}, \texttt{data}, \texttt{point\_types}, \texttt{blocks} and
+\texttt{run\_order} are in standard order (the order in which the design was created; Std = row number).
+
+{\small\begin{longtable}{@{}p{0.2\linewidth}p{0.76\linewidth}@{}}
+\caption{Top-level fields of a \texttt{.doe} project file.}\label{tab:a-file}\\
+\toprule
+Field & Content \\
+\midrule
+\endfirsthead
+\toprule
+Field & Content \\
+\midrule
+\endhead
+\bottomrule
+\endfoot
+\texttt{version} & File format version (3). \\
+\texttt{design\_type} & Design type key, for example \texttt{bbd}, \texttt{ccd}, \texttt{full\_factorial},
+  \texttt{simplex\_lattice}, \texttt{optimal\_rsm}, \texttt{combined\_optimal}, \texttt{lhs}, \texttt{historical}. \\
+\texttt{options} & Design options (center points, alpha, blocks, planned model, random seed, augmentation labels,
+  \dots). \\
+\texttt{mixture\_total} & Total of the mixture components (1 for process designs). \\
+\texttt{factors} & List of factors: \texttt{name}, \texttt{unit}, \texttt{low}, \texttt{high}, \texttt{kind}
+  (\texttt{numeric}, \texttt{categoric}, \texttt{process}), \texttt{levels} (categoric level names), \texttt{upper}
+  (upper limit of a mixture component), \texttt{sd} (standard deviation for propagation of error). For mixture
+  components \texttt{low} is the lower limit. \\
+\texttt{responses} & List of responses: \texttt{name}, \texttt{unit}, \texttt{kind} (\texttt{normal},
+  \texttt{binomial}, \texttt{poisson}), \texttt{trials} (binomial trials per run). \\
+\texttt{coded} & Matrix of factor settings, one row per run, coded units. \\
+\texttt{point\_types} & Point type of each run (Factorial, Center, Axial, Edge, Vertex, Historical, \dots). \\
+\texttt{blocks} & Block number of each run. \\
+\texttt{run\_order} & Run number of each run. \\
+\texttt{constraints} & Linear constraints: \texttt{text}, \texttt{coef}, \texttt{op}, \texttt{rhs} (actual
+  units). \\
+\texttt{groups}, \texttt{htc} & Whole-plot number of each run and indices of the hard-to-change factors
+  (split-plot designs; otherwise \texttt{null} and empty). \\
+\texttt{data} & Matrix of response values, one row per run, one column per response. \\
+\texttt{model\_specs} & Per response (key = response index): \texttt{order}, \texttt{terms} (selected terms as
+  exponent vectors, or \texttt{null} for the full model of the order) and \texttt{transform} (kind, $\lambda$,
+  constant $k$). \\
+\texttt{opt\_criteria} & Desirability criteria: factor limits (keys \texttt{f0}, \texttt{f1}, \dots), response goals,
+  limits, target, importance and shape (key = response index), and POE criteria (\texttt{poe0}, \dots). \\
+\texttt{ann} & Trained ANN models per response: architecture, activation, weights and biases, normalization
+  parameters, data split, seed, metrics and the cross-validated diagnosis. A combined (multi-output) network is
+  stored once and referenced by its responses. \\
+\texttt{model\_source} & \texttt{rsm} or \texttt{ann} for each response. \\
+\texttt{excluded} & Indices of the runs excluded from the analysis. \\
+\texttt{notes} & Text of the Notes page. \\
+\texttt{results} & Saved results: \texttt{ann\_search}, \texttt{learning}, \texttt{solutions},
+  \texttt{criteria\_used}, \texttt{nsga\_result}, \texttt{nsga\_compare}. Numerical arrays are stored as
+  \{\texttt{"\_\_array\_\_"}: values, \texttt{"shape"}, \texttt{"dtype"}\}. A result larger than 5\,000\,000
+  characters is left out. \\
+\end{longtable}}
+
+Older files (DOE Studio, versions 1 to 6) have the same structure without some of the newer fields; missing fields
+take default values, and point-type labels of the earliest versions are translated when the file is read. Editing a
+project file by hand is possible but not recommended: an invalid file cannot be opened (Chapter~\ref{chap:12}).
+
+\section{Constants and thresholds}
+\label{sec:a-constants}
+
+The tables below list the fixed numbers used by the computations: significance levels, limits of diagnostic plots,
+algorithm settings and the thresholds of the readiness and adequacy checks. Values that can be changed in the user
+interface are marked ``default''. $n$ is the number of runs used in a model, $p$ the number of model coefficients,
+$N$ the number of complete runs.
+
+{\small\begin{longtable}{@{}p{0.26\linewidth}p{0.46\linewidth}p{0.22\linewidth}@{}}
+\caption{Design and design evaluation.}\label{tab:a-const-design}\\
+\toprule
+Item & Value & Where used / meaning \\
+\midrule
+\endfirsthead
+\toprule
+Item & Value & Where used / meaning \\
+\midrule
+\endhead
+\bottomrule
+\endfoot
+Factor letters & A--H, J--Z (no I), at most 25 & All pages \\
+Rotatable CCD alpha & $\alpha = n_F^{1/4}$ & $n_F$ = number of factorial points \\
+Optimal designs: lack-of-fit and replicate points & 5 and 5 (default) & New Design \\
+Optimal designs: search & exchange algorithm, 6 random starts, at most 300 iterations; I-criterion averaged over 3000
+  region points & New Design \\
+Latin hypercube & maximin $\phi_p$ criterion with $p=15$; $\min(20\,000, 200n)$ annealing iterations; random
+  (not optimized) above 2000 points & New Design \\
+Power in Design Evaluation & $\Delta = 2$, $\sigma = 1$, $\alpha = 0.05$ (defaults); target 80\,\% & Design
+  Evaluation, Design Guide \\
+VIF & ideal 1; $> 10$ high correlation & Design Evaluation \\
+Recommended degrees of freedom & lack of fit $\ge 3$, pure error $\ge 4$, residual $\ge 5$ & Design Evaluation \\
+FDS and matrix measures & 4000 and 3000 random points of the region & Design Evaluation \\
+G-efficiency & model columns only (no block columns); maximum of $v(x)$ over the design points, the corners or
+  vertices of the region (up to 4096 combinations; none above 12 process factors) and the 3000 random points & Design
+  Evaluation \\
+\end{longtable}}
+
+{\small\begin{longtable}{@{}p{0.26\linewidth}p{0.46\linewidth}p{0.22\linewidth}@{}}
+\caption{Data Readiness (status: ok / needs attention / problem).}\label{tab:a-const-ready}\\
+\toprule
+Check & Thresholds & Meaning \\
+\midrule
+\endfirsthead
+\toprule
+Check & Thresholds & Meaning \\
+\midrule
+\endhead
+\bottomrule
+\endfoot
+Score & ok = 100, needs attention = 50, problem = 0; $\ge 85$ Ready, $\ge 60$ Fair, $< 60$ Not ready yet & Mean of
+  the check statuses \\
+Runs vs model parameters & residual df $\ge 5$ ok, $\ge 1$ attention, 0 problem & Error estimate \\
+Numeric factor levels & $\ge 3$ levels per factor & Needed for curvature \\
+Replicates (pure error) & pure-error df $\ge 3$ ok, $\ge 1$ attention, 0 problem & Lack-of-fit test \\
+Multicollinearity & max VIF $\le 5$ ok, $\le 10$ attention & \\
+High leverage & $h_i > \max(2p/n,\,0.5)$ & \\
+Factor space coverage & largest gap $\le 0.3$ ok, $\le 0.5$ attention (relative to the diagonal) & \\
+Outliers and influence & Bonferroni limit of the studentized residuals; Cook's distance $> 1$ & \\
+Response transform & recommended by Box-Cox and residual SS lower by $\ge 5\,\%$ & \\
+Constant variance & Spearman correlation of $|e|$ and $\hat y$ positive with $p < 0.05$ & \\
+Drift over run order & Durbin-Watson $< 1.4$ or $> 2.6$, or trend $p < 0.01$ & \\
+Model fit & lack of fit $p < 0.05$, Adj $-$ Pred $R^2 > 0.2$ or Pred $R^2 < 0.5$ (attention); Pred $R^2 < 0$
+  (problem) & Info for split-plot (REML) responses \\
+Signal / noise & $\ge 4$ ok, $\ge 2$ attention & SD of response / pure-error SD \\
+Model significance & model $p < 0.05$ & Optimization readiness; Info for split-plot (REML) responses \\
+Prediction reliability & Pred $R^2 \ge 0.7$ ok, $\ge 0.4$ attention & \\
+Optimum location & within 2\,\% of a factor bound & Optimum at the edge \\
+Data support at the optimum & distance to nearest run $> 0.2$ or CI half-width $> 10\,\%$ of the response range &
+  Confirmation runs suggested \\
+\end{longtable}}
+
+{\small\begin{longtable}{@{}p{0.26\linewidth}p{0.46\linewidth}p{0.22\linewidth}@{}}
+\caption{RSM analysis and diagnostics.}\label{tab:a-const-rsm}\\
+\toprule
+Item & Value & Where used / meaning \\
+\midrule
+\endfirsthead
+\toprule
+Item & Value & Where used / meaning \\
+\midrule
+\endhead
+\bottomrule
+\endfoot
+Significance level & 0.05 & ANOVA, GLM and REML verdicts; Fit Summary suggestion; lack of fit \\
+Backward elimination $\alpha_{out}$ & 0.10 (default, 0.01--0.50) & RSM Analysis \\
+Adjusted vs predicted $R^2$ & difference $< 0.2$ & ANOVA note \\
+Adequate precision & $> 4$ & ANOVA note \\
+Shapiro-Wilk test & $3 \le n \le 5000$, $p \ge 0.05$ normal & ANOVA note \\
+Coefficient Table colors & $p < 0.01$, $< 0.05$, $< 0.10$ & Coefficient Table \\
+Outlier limit (Bonferroni) & $|t_i| > t_{1-0.05/(2n),\,n-p-1}$ & Diagnostics \\
+Leverage & $> 2p/n$ & Diagnostics \\
+Cook's distance & $> 1$ (dotted line at $4/n$) & Diagnostics \\
+DFFITS, DFBETAS & $> 2\sqrt{p/n}$, $> 2/\sqrt{n}$ & Diagnostics \\
+Box-Cox & $\lambda \in [-3, 3]$, 121 values; 95\,\% CI: $\ln SS \le \ln SS_{min} + \ln(1+t^2_{0.975,\nu}/\nu)$ &
+  Box-Cox tab \\
+Lenth's method & $s_0 = 1.5\,\mathrm{median}|c|$; PSE from $|c| < 2.5 s_0$; $d = m/3$; ME $= t_{0.975,d}$PSE;
+  SME with $\gamma = (1+0.95^{1/m})/2$ & Effects tab \\
+Replicate groups & identical coded settings (6 decimals) in the same block & Pure error \\
+Aliasing tolerance & $10^{-8}\max(1,\max|X|)\max(n,p)$ & Rank check of the model matrix \\
+Large data & $n > 400$: sums of squares from the Gram matrix & RSM fit \\
+GLM fit (IRLS) & at most 100 iterations, tolerance $10^{-10}$; separation warning for fitted probabilities
+  $< 10^{-8}$ or $> 1-10^{-8}$ & Logistic and Poisson regression \\
+Hosmer-Lemeshow & $g = \min(10, \max(2, \lfloor n/2 \rfloor))$ groups, df $= g-2$ & Logistic regression \\
+REML & $\ln\gamma \in [-12, 9]$, $\gamma = \sigma^2_{wp}/\sigma^2$ & Split-plot analysis \\
+Graph grid & $60 \times 60$; ternary resolution 60 (180 if less than 20\,\% feasible) & Model Graphs \\
+POE derivative step & $h = 10^{-4}$ (central differences) & Propagation of error \\
+\end{longtable}}
+
+{\small\begin{longtable}{@{}p{0.26\linewidth}p{0.46\linewidth}p{0.22\linewidth}@{}}
+\caption{ANN, data adequacy and checks A and B.}\label{tab:a-const-ann}\\
+\toprule
+Item & Value & Where used / meaning \\
+\midrule
+\endfirsthead
+\toprule
+Item & Value & Where used / meaning \\
+\midrule
+\endhead
+\bottomrule
+\endfoot
+Network settings & Bayesian regularization, mapminmax, tansig, early stopping after 6 validation failures, split
+  70/15/15\,\%, 10 restarts, 500 epochs, seed 1 (defaults) & ANN page \\
+Bayesian regularization (trainbr) & $\alpha = 0.01$, $\beta = 1$ at the start; warm-up of 15 epochs before the
+  first update of $\alpha$, $\beta$ and $\gamma$ (and before validation failures are counted) & Training; $\gamma$
+  reported as ``not estimated yet'' when the best epoch lies within the warm-up \\
+Automatic switch to Adam & more than 2000 weights, or more than $3\times10^7$ Jacobian elements & Training \\
+Parallel restarts & only if the workload exceeds $3\times10^7$ (rows $\times$ weights $\times$ epochs $\times$
+  restarts) & Training \\
+Large data & more than 5000 runs: final-training restarts limited to $\max(3, \text{cores})$ & ANN page \\
+Fit diagnosis & overfitting if $E_{new} > 2E_{tr}$ and $E_{new}-E_{tr} > 0.02$, or $E_{tr} < 0.5\,E_{noise}$;
+  underfitting if $E_{tr} > \max(3E_{noise}, 0.1)$ (0.2 without noise estimate) and $E_{new} < 1.5E_{tr}+0.02$ &
+  Final model \\
+Architecture search & 5 folds (default, 3--10); hold-out 70/15/15 from 400 runs; random subset of 4000 runs above
+  4000; 3 restarts, 300 epochs per candidate; patience 2 (default) & Check A \\
+Neuron counts tried & 1, 2, 3, 4, 5, 6, 8, 10, 12, 15, 20, 25, 30, 40, 50, 64, 80, 100, 128, 160, 200, then
+  $\times 1.25$ & Check A \\
+Improvement required & 1\,\% (new error $< 0.99\times$ best) for neurons and layers & Check A \\
+Candidate status & over: $E_{te} > 2E_{tr}$, $E_{te} > 1.2E^*$, $E_{te}-E_{tr} > 0.02$; under: $E_{tr} > 1.5E^*$,
+  $E_{te} < 1.5E_{tr}+0.02$, $E_{te} > 1.2E^*$, $E_{te}-E^* > 0.01$ & Check A ($E^*$ = lowest test error) \\
+One-standard-error rule & $E_{te} \le E_{te,best} + \max(\mathrm{SE}, 0.002)$; fewest weights, then fewest layers &
+  Check A \\
+Learning curve & $\ge 12$ runs; test set 20\,\% (at least 3); training fractions 0.3, 0.4, \dots, 1.0; 10/6/4 repeats
+  for $N < 60$ / $< 400$ / larger; 2 restarts, 300 epochs, 6 validation failures & Check B \\
+Power-law fit & $c \in [0.2, 2.5]$ (47 values); two smallest sizes dropped when $\ge 6$ sizes; tolerance 0.01 in
+  $R^2$; 200 bootstrap resamples & Check B \\
+Learning-curve status & enough $n^* \le n_{full}$; far $n^* > 5n_{full}$; few $N < 25$ & Check B \\
+Data adequacy & runs $\ge 30$ good, $\ge 12$ caution; rows/weights $\ge 3$ good, $\ge 1$ caution; $\ge 3$ levels per
+  factor; $\ge 5$ runs per categoric level (2 caution); signal/noise $\ge 4$ (2); robust $|z| > 3.5$ outlier;
+  $|$skewness$| > 1$ or max/min $> 10$; factor $|r| < 0.5$ good, $< 0.9$ caution; gap $\le 0.35$ and range covered
+  $\ge 0.9$; RSM lack of fit $p < 0.05$ or Pred $R^2 \ge 0.95$; range ratio $> 100$ & ANN Data Adequacy \\
+Worker processes & default: logical cores $-1$; closed after 90\,s idle & Multi-core computing \\
+\end{longtable}}
+
+{\small\begin{longtable}{@{}p{0.26\linewidth}p{0.46\linewidth}p{0.22\linewidth}@{}}
+\caption{Optimization, prediction and sensitivity; checks C and D.}\label{tab:a-const-opt}\\
+\toprule
+Item & Value & Where used / meaning \\
+\midrule
+\endfirsthead
+\toprule
+Item & Value & Where used / meaning \\
+\midrule
+\endhead
+\bottomrule
+\endfoot
+Desirability importance & 1--5 (``+'' to ``+++++''), default 3 & Desirability \\
+Desirability shape exponent & 1 (default, linear), 0.1--10 & Desirability \\
+Desirability search & 4000 random points (12\,000 drawn when constraints exist), seed 0; best 30 as starts (at
+  least 8 per categoric combination); Nelder-Mead or SLSQP; solutions closer than 0.03 (coded) merged; 20 shown &
+  Desirability \\
+NSGA settings & population 100 (20--2000), 300 generations, crossover probability 0.9, $\eta_c = 15$,
+  $\eta_m = 20$, mutation probability $1/n_{var}$, seed 1 (defaults) & NSGA-II / III \\
+Algorithm choice (Automatic) & NSGA-III for 3 or more objectives & NSGA-II / III \\
+Reference directions & Das-Dennis, largest $H$ with $\binom{H+m-1}{m-1} \le N_{pop}$ & NSGA-III \\
+Hypervolume & reference point 1.1 per normalized objective; exact for 2 objectives; Monte Carlo with 8000 points
+  (seed 20240607) for 3 or more & Check C, D \\
+Automatic stop & tolerance 0.1\,\% (default), window 20 generations (default), shift $< 1\,\%$, noise cap 1\,\%,
+  at least 30 generations; checked every generation (2 objectives) or every 5th (3 or more); off for NSGA-II with
+  4 or more objectives & Check C \\
+Population check & seeds $+101$ and $+202$, population $\times 2$; HV change $< 1\,\%$; TOPSIS shift note above
+  15\,\% & Check C \\
+ANN vs RSM & $\Delta < 5\,\%$ agree, $< 10\,\%$ partial; $dx < 15\,\%$; hypervolume loss $> 0.05$ noted & Check D \\
+Prediction & confidence 90 / 95 / 99\,\% (default 95); $n = 3$ confirmation runs (default, 1--100) & Prediction \\
+ANN confirmation & $|\bar y - \hat y| \le 5\,\%$ of the response data range & Prediction \\
+Parametric study & 11 points (default, 3--401); 3 curves of a second factor (default, 2--7) & Sensitivity \\
+Standardized coefficients & Latin hypercube, 120 points (default), seed 0 & Sensitivity \\
+Sobol indices & $N = 8192$ (default; rounded up to a power of 2, at least 64), $N(d+2)$ model evaluations,
+  scrambled Sobol sequence (seed 0), 200 bootstrap resamples, 95\,\% intervals & Sensitivity \\
+Tornado & $\pm 10\,\%$ of each factor range (default, 1--50\,\%) & Sensitivity \\
+Trade-off rate & between the means of $\min(12, \max(2, \lfloor n/6 \rfloor))$ groups of neighbouring Pareto
+  solutions sorted by the first objective & Sensitivity (Pareto front) \\
+\end{longtable}}
+
+\section{Glossary}
+\label{sec:a-glossary}
+
+\begin{description}[style=nextline,leftmargin=2em]
+\item[Adequate precision] Range of the predicted values divided by their average standard error. Values above 4
+  indicate that the model signal is strong enough to navigate the design space.
+\item[Aliasing] Two model terms are aliased when the design cannot estimate them separately, because their columns
+  in the model matrix are identical or linearly dependent (for example a main effect and a two-factor interaction
+  in a resolution III fraction). REGEN removes aliased terms automatically and lists them; the alias structure of
+  Design Evaluation shows how higher-order terms bias the estimated ones \citep{montgomery2017}.
+\item[ANN] Artificial neural network: here a feed-forward network with one or more hidden layers that maps the
+  coded factors to the responses \citep{hastie2009}.
+\item[Bayesian regularization] Training method that adds a penalty on the size of the weights and estimates its
+  strength from the data \citep{mackay1992,foresee1997}; recommended for small DOE data sets.
+\item[Box-Cox transformation] Power transformation $y^\lambda$ of the response chosen by maximum likelihood, used to
+  stabilize the variance \citep{boxcox1964}.
+\item[Coded units] Factor values scaled so that the low level is $-1$ and the high level $+1$
+  (Equation~\ref{eq:ch01-coded}).
+\item[Cook's distance] Influence of one run on all fitted values \citep{cook1977}; values above 1 deserve
+  attention.
+\item[Cross-validation] Repeatedly leaving part of the data out, fitting on the rest and predicting the left-out
+  part; $k$-fold cross-validation uses $k$ disjoint parts \citep{hastie2009}.
+\item[Desirability] A value $d_i$ between 0 (unacceptable) and 1 (fully desirable) for each response, combined into
+  the overall desirability $D$, a weighted geometric mean \citep{derringer1980}.
+\item[Early stopping] Training is stopped when the error on validation data stops decreasing
+  \citep{prechelt1998}.
+\item[Effect coding] Coding of a categoric factor with $L$ levels by $L-1$ columns whose coefficients are
+  differences from the mean over all levels.
+\item[FDS] Fraction of Design Space plot: the share of the design region in which the standard error of prediction
+  is below a given value.
+\item[Hypervolume] Size of the objective space dominated by a Pareto front and bounded by a reference point
+  \citep{zitzler1999}. Larger is better; REGEN uses it to measure convergence (check C) and to compare fronts
+  (check D).
+\item[Knee point] The Pareto solution closest to the utopia point after the objectives are scaled to [0,~1].
+\item[Lack of fit] Part of the residual variation that is not explained by pure error; a significant lack of fit
+  means the model form is not adequate.
+\item[Learning curve] Prediction error on fixed test data as a function of the number of training runs; used to
+  judge whether more data would help (check B).
+\item[Leverage] Diagonal element $h_{ii}$ of the hat matrix; how strongly run $i$ determines its own prediction.
+\item[Lenth's method] Estimate of the error from the effects of an unreplicated factorial (pseudo standard error,
+  PSE) with margins of error ME and SME \citep{lenth1989}.
+\item[NSGA-II, NSGA-III] Evolutionary multi-objective algorithms that keep a population of solutions sorted into
+  non-dominated fronts, with crowding distance (NSGA-II, \citealp{deb2002}) or reference directions (NSGA-III,
+  \citealp{deb2014,das1998}).
+\item[Pareto front] The set of solutions for which no objective can be improved without making another one worse.
+\item[POE] Propagation of error: the standard deviation transmitted to the response by variation of the factor
+  settings and the residual error; low POE means a robust setting.
+\item[Predicted $R^2$] $1 - \mathrm{PRESS}/SS_{total}$; the share of variation explained when every run is
+  predicted by a model fitted without that run.
+\item[PRESS] Prediction error sum of squares, $\sum_i \bigl(e_i/(1-h_{ii})\bigr)^2$ \citep{allen1974}.
+\item[Pseudo-component] Mixture component rescaled to the constrained region (Equation~\ref{eq:ch01-pseudo})
+  \citep{cornell2002}.
+\item[Pure error] Variation between replicated runs (identical settings); the reference for the lack-of-fit test.
+\item[Resolution] Length of the shortest word in the defining relation of a two-level fractional factorial. In a
+  resolution III design main effects are aliased with two-factor interactions; in resolution IV main effects are
+  clear; in resolution V two-factor interactions are clear as well \citep{montgomery2017}.
+\item[REML] Restricted maximum likelihood: estimation of variance components (here whole-plot and subplot variance
+  of split-plot designs) \citep{patterson1971}.
+\item[Scheff\'e model] Polynomial mixture model without intercept \citep{scheffe1958}.
+\item[Sobol index] Variance-based sensitivity measure: the first-order index $S_1$ is the share of the response
+  variance caused by one factor alone, the total index $S_T$ includes all its interactions
+  \citep{sobol2001,saltelli2010,jansen1999}.
+\item[Split-plot design] Design in which hard-to-change factors are reset only between whole plots, so the runs of a
+  whole plot share a random whole-plot effect \citep{goos2011}.
+\item[Standardized regression coefficient] Regression coefficient of a linear fit to sampled model predictions,
+  scaled by the standard deviations of the factor and the response \citep{saltelli2008}.
+\item[TOPSIS] Technique for Order Preference by Similarity to an Ideal Solution: ranks Pareto solutions by their
+  relative closeness to the ideal and distance from the anti-ideal point \citep{hwang1981}.
+\item[Tornado chart] Local sensitivity: the change of each response when each factor is moved by a fixed share of
+  its range around a reference point.
+\item[VIF] Variance inflation factor: how much the variance of a coefficient is inflated by correlation with the
+  other terms; 1 is ideal \citep{belsley1980}.
+\end{description}

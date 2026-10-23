@@ -1,0 +1,244 @@
+\chapter{Introduction}\label{chap:1}
+\label{ch:intro}
+
+\section{What REGEN is}
+\label{sec:ch01-what}
+
+REGEN (Response Engineering with GEnetic algorithms and Neural networks) is a Windows desktop application for the
+design and analysis of experiments. It brings together, in one project file, the classical tools of design of
+experiments (DOE) and response surface methodology (RSM) \citep{montgomery2017,myers2016}, artificial neural
+networks (ANN) as an alternative or complementary response model, and multi-objective optimization with the
+evolutionary algorithms NSGA-II and NSGA-III \citep{deb2002,deb2014}.
+
+REGEN is meant for engineers, researchers and students who plan experiments, collect data in the laboratory or the
+plant, and want to turn the data into a model and an optimum that can be confirmed. Typical questions are:
+\begin{itemize}
+  \item Which design and how many runs do I need to screen four factors, or to fit a quadratic model in three
+        factors?
+  \item Are my data good enough to build a model, and which runs should I add?
+  \item Which factors and interactions are significant, and how well does the model predict new runs?
+  \item Is an ANN better than the polynomial model for my data, and do I have enough data for an ANN?
+  \item Which settings give the best compromise between conflicting responses, and do the RSM and ANN models agree
+        on that compromise?
+  \item How sensitive is the optimum to each factor, and does a confirmation run fall inside the prediction
+        interval?
+\end{itemize}
+
+The program runs entirely on the local computer. No internet connection, no account and no Python installation are
+needed. All results can be exported (Excel, CSV, PDF, clipboard), so every number and plot can be reproduced or
+redrawn outside REGEN.
+
+\section{The workflow}
+\label{sec:ch01-workflow}
+
+The pages of REGEN follow the order in which an experimental study is usually carried out. The navigation tree on
+the left of the main window groups them by stage (Project, Design, Analysis, Optimization, Tools). A complete study
+passes through the following steps; each step is described in its own chapter.
+
+\begin{enumerate}
+  \item \textbf{Design.} Choose a design with \ui{New Design} or let the \ui{Design Guide} recommend a design and a
+        number of runs for the goal (screening, characterization, RSM optimization, ANN modeling, or RSM and ANN
+        together). Evaluate the design before any run is made (\ui{Design Evaluation}: degrees of freedom, power,
+        aliasing, variance inflation, fraction of design space). See Chapter~\ref{chap:3}.
+  \item \textbf{Data.} Run the experiments in the randomized run order and type or paste the responses in the
+        \ui{Data} page, or import existing (historical) data from Excel or CSV. Runs can be excluded from the
+        analysis without deleting them, and the design can be augmented. See Chapter~\ref{chap:4}.
+  \item \textbf{Readiness.} The \ui{Data Readiness} page scores the data for modeling and for optimization and
+        proposes extra runs (D-optimal, space-filling, replicates, confirmation runs) that can be added to the data
+        sheet with one click. See Chapter~\ref{chap:4}.
+  \item \textbf{RSM.} Fit polynomial, Scheff\'e mixture, logistic/Poisson or split-plot models on the
+        \ui{RSM Analysis} page: fit summary, Type~III ANOVA, equations, diagnostics, Box-Cox and factorial effects.
+        See Chapter~\ref{chap:5}.
+  \item \textbf{ANN.} Assess data adequacy for an ANN, search the network architecture automatically by
+        cross-validation, train the final network and check with a learning curve whether more data would help.
+        RSM or ANN can be selected separately for each response. See Chapter~\ref{chap:7}.
+  \item \textbf{Graphs.} Contour, 3D surface, one-factor, interaction, cube, perturbation, ternary, trace,
+        overlay, desirability and propagation-of-error plots of the selected model (\ui{Model Graphs}). See
+        Chapter~\ref{chap:6}.
+  \item \textbf{Optimization.} Desirability optimization of one or more responses, or the Pareto front of two or
+        more objectives with NSGA-II/NSGA-III, with an automatic stopping rule, a population-size check and a
+        comparison of the fronts obtained with RSM and with ANN. See Chapter~\ref{chap:8}.
+  \item \textbf{Sensitivity.} Parametric studies, global sensitivity (standardized regression coefficients or
+        Sobol indices), local sensitivity (tornado chart) and the trade-off along the Pareto front. See Chapter~\ref{chap:9}.
+  \item \textbf{Prediction and confirmation.} Predict the responses at the chosen settings with confidence and
+        prediction intervals, run confirmation experiments and enter their mean to see whether the model is
+        confirmed. See Chapter~\ref{chap:10}.
+\end{enumerate}
+
+Chapter~\ref{chap:11} follows one case study through the whole workflow.
+
+\section{The four diagnostic checks}
+\label{sec:ch01-checks}
+
+When an ANN is used next to (or instead of) RSM, and when the optimum is searched with an evolutionary algorithm,
+several decisions are usually made by habit: the size of the network, whether the data are sufficient, when the
+algorithm has run long enough, and whether the optimum depends on the chosen model. REGEN turns these decisions
+into four explicit checks with numerical criteria. Each check answers one question, applies a stated pass
+criterion and tells the user what to do when the criterion is not met.
+Table~\ref{tab:ch01-checks} summarizes them; the criteria are those implemented in the program.
+
+{\footnotesize
+\begin{longtable}{@{}p{0.11\linewidth}p{0.16\linewidth}p{0.36\linewidth}p{0.22\linewidth}p{0.03\linewidth}@{}}
+\caption{The four diagnostic checks of REGEN. $E$ denotes the normalized mean squared error (MSE divided by the
+variance of the response; $R^2 = 1-E$), $E_{te}$ the cross-validated test error, $n^*$ the estimated number of
+training runs, $n_{full}$ the largest training subset of the learning curve, HV the hypervolume and $w$ the
+generation window.}\label{tab:ch01-checks}\\
+\toprule
+Check & Question & Pass criterion & Action when it fails & Ch. \\
+\midrule
+\endfirsthead
+\toprule
+Check & Question & Pass criterion & Action when it fails & Ch. \\
+\midrule
+\endhead
+\bottomrule
+\endfoot
+A. Architecture search &
+Which network (layers and neurons) generalizes best for the available data? &
+Networks are grown one neuron count at a time while the cross-validated test error improves by at least 1\,\%
+(stop after 2 failures in a row; a new layer is kept only if it improves the best test error by at least 1\,\%).
+Each candidate is classified Good fit, Overfitting or Underfitting. The selected network is the smallest (fewest
+weights) Good candidate whose test error is within $\max(\mathrm{SE},\,0.002)$ of the lowest test error
+(one-standard-error rule). &
+If no candidate is a Good fit, all candidates are used and the status is reported; if the ANN test $R^2$ is not
+above the RSM value on the same folds, the program states that RSM predicts new data as well as or better than
+ANN: keep RSM, or add runs. & 7 \\
+\addlinespace
+B. Learning curve &
+Would the ANN still improve with more runs? &
+A power law $e(n)=a+b\,n^{-c}$ is fitted to the median test error; $n^*$ is the training size at which the test
+$R^2$ is within 0.01 of its limit. ``The data is sufficient'' if the median $n^*\le n_{full}$; ``more data would
+still help'' if $n_{full}<n^*\le5\,n_{full}$; ``far from sufficient'' if $n^*>5\,n_{full}$. Fewer than 25 runs:
+``too little data''; fewer than 12 runs: not computed. &
+Add about the estimated number of runs (gradually, for example half first) using the space-filling suggestions of
+Data Readiness, then repeat; with far too little data use RSM, fewer factors or narrower ranges. & 7 \\
+\addlinespace
+C. Hypervolume stopping rule &
+Has NSGA-II/III run enough generations, and is the population large enough? &
+Generations: the mean hypervolume of the last $w=20$ generations changes by less than
+$\max(\mathrm{tol},\min(\mathrm{noise},1\,\%))$ (tol = 0.1\,\%) compared with the previous $w$ generations, and
+the ideal point moves by less than 1\,\% of the range; the run stops when this has held for $w$ more generations
+(at least 30 generations). Population: two other seeds change the HV by less than 1\,\% and a doubled population
+adds less than 1\,\%. &
+Increase the maximum number of generations; increase the population (for example to $2N$) and check again; for
+four or more objectives use NSGA-III. & 8 \\
+\addlinespace
+D. ANN vs RSM fronts &
+Does the optimum depend on the choice of model? &
+Both fronts are re-predicted with the other model. $\Delta$ = largest (over objectives) mean absolute difference
+between the RSM and ANN predictions on the front solutions, in \% of the response data range; $dx$ = largest
+distance between the two TOPSIS choices in \% of the factor range. Agree: $\Delta<5\,\%$ and $dx<15\,\%$. Partial
+agreement: $\Delta<10\,\%$. Otherwise the models differ. &
+Do not rely on one model: make confirmation runs at both TOPSIS points, check the region of the largest
+differences, and trust the model with the better predictive accuracy (RSM predicted $R^2$, ANN cross-validated
+$Q^2$). & 8 \\
+\end{longtable}}
+
+The checks do not replace engineering judgement. They make the reasons for a decision visible and reproducible, and
+they are reported in the program and in the PDF report so that a reader of the results can see on which basis a
+network, a stopping point or an optimum was accepted.
+
+\section{Conventions used in this manual}
+\label{sec:ch01-conventions}
+
+\paragraph{User-interface labels.} Names of pages, buttons, options and menu items are printed in a sans-serif font,
+for example \ui{Run Optimization} or \ui{RSM Analysis}, exactly as they appear on the screen. Menu paths are written
+as \menupath{File $\rightarrow$ Case Studies\dots}. A label that ends in ``\dots'' opens a dialog.
+
+\paragraph{Factors, responses and letters.} Factors are named with capital letters A, B, C, \dots{} in the order in
+which they are defined; the letter I is skipped to avoid confusion with the number 1, so the letters run A--H, J--Z
+(at most 25 factors). Responses are numbered R1, R2, \dots{} and shown as, for example, \ui{R1: Yield (\%)}.
+
+\paragraph{Actual and coded units.} Factor values are entered and displayed in \emph{actual units} (for example
+\textdegree C or minutes). Internally, and in the coded model equation, a numeric factor $x$ with low level $L$ and
+high level $H$ is used in \emph{coded units}
+\begin{equation}
+  z = \frac{x-(L+H)/2}{(H-L)/2}, \qquad -1 \le z \le +1 \text{ inside the design range},
+  \label{eq:ch01-coded}
+\end{equation}
+so that the low level is $-1$, the center is 0 and the high level is $+1$. Coefficients in coded units can be
+compared with each other directly; coefficients in actual units cannot, because they depend on the units.
+Categoric factors are stored as level indices and enter the models with effect coding (a factor with $L$ levels
+gives $L-1$ columns).
+
+\paragraph{Mixture components and pseudo-components.} In a mixture the components $x_i$ add up to a fixed total $T$
+(for example 100\,\%), and each component has a lower limit $L_i$. REGEN works in \emph{pseudo-components}
+\begin{equation}
+  z_i = \frac{x_i - L_i}{T - \sum_j L_j}, \qquad \sum_i z_i = 1,
+  \label{eq:ch01-pseudo}
+\end{equation}
+which map the constrained mixture region onto a simplex \citep{cornell2002,piepel1982}. Scheff\'e mixture
+models \citep{scheffe1958} and ternary plots are expressed in pseudo-components; the data sheet shows actual amounts
+unless \ui{Show pseudo-components} is ticked.
+
+\paragraph{Numbers.} Both the decimal point and the decimal comma are accepted wherever numbers are typed or pasted.
+Copied tables use the decimal separator of the Windows regional settings (a second menu item copies with the other
+separator). In this manual the decimal point is used.
+
+\paragraph{Case studies.} Most examples use the eight built-in case studies (\menupath{File $\rightarrow$ Case
+Studies\dots}, Section~\ref{sec:ch02-cases}). Their data are generated with fixed random seeds, so the numbers shown
+in this manual can be reproduced exactly. The screenshots were made with one CPU core and the default seeds.
+
+\section{How this manual is organized}
+\label{sec:ch01-organization}
+
+\begin{itemize}
+  \item Chapter~\ref{chap:2}, \emph{Getting Started}: installation, the main window, menus, project files, case studies,
+        import and export.
+  \item Chapter~\ref{chap:3}, \emph{Designs}: all design types, the Design Guide and Design Evaluation.
+  \item Chapter~\ref{chap:4}, \emph{Data}: the data sheet, augmentation, simulation, Data Readiness and normalization.
+  \item Chapter~\ref{chap:5}, \emph{RSM Analysis}: model fitting, ANOVA, diagnostics, transformations, GLM and split-plot
+        analysis.
+  \item Chapter~\ref{chap:6}, \emph{Model Graphs}.
+  \item Chapter~\ref{chap:7}, \emph{Artificial Neural Networks}, including checks A and B.
+  \item Chapter~\ref{chap:8}, \emph{Optimization}: desirability, NSGA-II/III, checks C and D.
+  \item Chapter~\ref{chap:9}, \emph{Sensitivity and Parametric Study}.
+  \item Chapter~\ref{chap:10}, \emph{Prediction and Confirmation}.
+  \item Chapter~\ref{chap:11}, a \emph{worked example} from design to confirmation.
+  \item Chapter~\ref{chap:12}, \emph{Troubleshooting and Frequently Asked Questions}.
+  \item Appendix~A, \emph{Reference}: keyboard shortcuts, the project file format, constants and thresholds, and a
+        glossary.
+\end{itemize}
+
+Each feature section follows the same pattern: purpose, how to use it, options, output and how to read it, the
+theory as implemented (with the constants used by the program), an example and a note on data export.
+
+\section{How to cite REGEN}
+\label{sec:ch01-cite}
+
+REGEN is developed by Erdiyanto Munandar and Nasruddin, Department of Mechanical Engineering, Faculty of
+Engineering, Universitas Indonesia. The source code is available at \url{https://github.com/chumporium/REGEN} under
+the MIT License. Every released version is archived in Zenodo:
+\begin{itemize}
+  \item version 7.0.0: DOI \href{https://doi.org/10.5281/zenodo.22944177}{10.5281/zenodo.22944177};
+  \item all versions (concept DOI, always resolves to the latest version):
+        \href{https://doi.org/10.5281/zenodo.22944176}{10.5281/zenodo.22944176}.
+\end{itemize}
+Please cite the version that was used for the work, for example:
+
+\begin{quote}
+Munandar, E., and Nasruddin. 2026. REGEN: Response Engineering with GEnetic algorithms and Neural networks, version
+7.0.0. Zenodo. \url{https://doi.org/10.5281/zenodo.22944177}
+\end{quote}
+
+A BibTeX entry:
+\begin{verbatim}
+@software{regen700,
+  author    = {Munandar, Erdiyanto and Nasruddin},
+  title     = {{REGEN}: Response Engineering with GEnetic algorithms
+               and Neural networks},
+  version   = {7.0.0},
+  year      = {2026},
+  publisher = {Zenodo},
+  doi       = {10.5281/zenodo.22944177},
+  url       = {https://doi.org/10.5281/zenodo.22944177}
+}
+\end{verbatim}
+The repository also contains the citation metadata (file \texttt{CITATION.cff}, shown by GitHub as \emph{Cite this
+repository}). When a method implemented in REGEN is essential for the results (for example the desirability
+function, NSGA-II or Sobol indices), please cite the original method as well; the references are given in the
+corresponding chapters.
+
+REGEN uses open-source libraries that keep their own licenses; the user interface uses PySide6 (Qt for Python),
+which is licensed under the LGPL-3.0. Versions 1 to 6 of the program were developed under the name DOE Studio;
+project files of those versions can still be opened.

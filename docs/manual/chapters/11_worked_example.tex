@@ -1,0 +1,390 @@
+% Chapter 11: Worked example
+\chapter{Worked Example}\label{chap:11}
+\label{ch:11}
+
+This chapter goes through a complete study with two built-in case studies:
+\begin{itemize}
+  \item \textbf{Part A, BBD extraction} (\ui{Extraction Optimization (Box-Behnken)}): a designed experiment with 17
+        runs and two conflicting responses. It is used for the whole route from data to confirmation: readiness, RSM,
+        ANN, desirability, NSGA-II, the checks C and D, sensitivity and prediction.
+  \item \textbf{Part B, dye adsorption} (\ui{Dye Adsorption (ANN, 40 runs)}): 40 historical runs of a strongly nonlinear
+        process with one response. It shows when an ANN is justified, with the checks A and B.
+\end{itemize}
+All numbers below are those of the screenshots of this manual: design seed 12345, ANN seed 1, NSGA seed 1, one CPU
+core. If you repeat the steps with the same settings you should see the same values; on a different computer the last
+digits of the ANN results may differ.
+
+A note on honesty before we start: not every check passes in this example. Check~D fails for the BBD case, and the
+reasons are instructive. The text explains what the failure means and what to do about it.
+
+% ======================================================================================================
+\section{Part A: open the case and check readiness}
+\label{sec:ch11-open}
+
+\subsection{Open the case study}
+\begin{enumerate}
+  \item Choose \menupath{File $\rightarrow$ Case Studies\dots} (or \ui{Case studies} on the start page, or
+        \ui{Case Studies} on the toolbar).
+  \item Select \ui{Extraction Optimization (Box-Behnken)} and click \ui{Open Case Study}
+        (Figure~\ref{fig:ch11-cases}).
+\end{enumerate}
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=0.75\linewidth]{case_studies.png}
+\caption{The \ui{Case Studies} dialog with the BBD extraction case selected.}
+\label{fig:ch11-cases}
+\end{figure}
+
+The \ui{Data} page shows a Box-Behnken design with three numeric factors, Temperature (60--80~°C), Time (30--90~min)
+and Concentration (1--3~\%), 17 runs including 5 center points, and the responses Yield (\%) and Purity (\%). The goal
+of the study is to maximize both.
+
+\subsection{Data readiness}
+Open \ui{Data Readiness} (Figure~\ref{fig:ch11-readiness}). With the reference model Quadratic (10 parameters) both
+responses are rated \ui{Ready}: Yield scores 94 for modeling and 96 for optimization, Purity 100 and 97. The checks
+behind the scores:
+\begin{itemize}
+  \item 17 complete runs, residual df 7, three levels per factor, pure error df 4, maximum VIF 1.01, largest gap
+        in the factor space 0.27: the design is sound.
+  \item Yield has two influential runs (runs 1 and 7, Cook's distance $>1$) and a significant lack of fit
+        (p 0.030), both marked \ui{Needs attention}. The signal-to-noise ratio is 15.4.
+  \item The optimization readiness is good: model $p=1.7\times10^{-6}$, predicted $R^2$ 0.886, the model-predicted
+        maximum of Yield (75.46~°C, 86.13~min, 2.298~\%) lies inside the region, at a distance of 0.16 from the
+        nearest run.
+\end{itemize}
+The recommendations are to check runs 1 and 7 for recording errors and, because of the lack of fit, to consider a
+higher-order model, a transform or an ANN. Runs 1 and 7 belong to the design and there is no record of a problem, so
+they stay in the analysis; the lack of fit is discussed below.
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=\linewidth]{readiness.png}
+\caption{\ui{Data Readiness} of the BBD case: both responses \ui{Ready}.}
+\label{fig:ch11-readiness}
+\end{figure}
+
+% ======================================================================================================
+\section{Part A: fit the response surface models}
+\label{sec:ch11-rsm}
+
+\subsection{Model selection and ANOVA}
+On \ui{RSM Analysis}, tab \ui{Fit Summary}, the sequential model comparison for Yield suggests the quadratic model
+(sequential $p<0.0001$, adjusted $R^2$ 0.9815, predicted $R^2$ 0.8857); the cubic model is aliased in a BBD. The
+page marks the suggestion with \ui{Significant lack of fit} and warns ``the suggested model (Quadratic) has significant
+lack of fit (p = 0.0302)''; the lack of fit is examined with the ANOVA below. Use the suggested model (\ui{Use
+Suggested Model}) for both responses.
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=\linewidth]{rsm_anova.png}
+\caption{ANOVA of the quadratic model for Yield.}
+\label{fig:ch11-anova}
+\end{figure}
+
+The \ui{ANOVA} tab for Yield (Figure~\ref{fig:ch11-anova}) gives:
+\begin{itemize}
+  \item Model $F=95.37$, $p<0.0001$; $R^2=0.9919$, adjusted $R^2=0.9815$, predicted $R^2=0.8857$, Adeq Precision 26.79,
+        standard deviation 0.714, C.V. 0.98~\%.
+  \item All linear and quadratic terms and the AB interaction are significant; AC ($p=0.337$) and BC ($p=0.407$) are
+        not. Removing them would change the predictions very little; the full quadratic model is kept here so that
+        both responses use the same model form.
+  \item Lack of fit $F=8.935$, $p=0.0302$: significant. The pure error (mean square 0.116, 4 df from five center
+        points) is very small compared with the lack-of-fit mean square (1.03). With such a precise replicate
+        estimate, even small systematic deviations from the quadratic surface become significant. The lack-of-fit
+        mean square corresponds to a standard deviation of about 1 percentage point of Yield, which is small relative to the response
+        range (64.1--78.3), and the predicted $R^2$ of 0.886 shows that the model predicts new runs well. We accept
+        the model and keep the lack of fit in mind: it is one reason to try an ANN (and to run check~D).
+\end{itemize}
+The equation in coded factors is
+$\text{Yield}=77.772+3.934A+3.398B+1.489C+2.140AB-0.368AC-0.315BC-5.430A^2-2.742B^2-1.780C^2$.
+
+For Purity the quadratic model gives $R^2=0.9886$, adjusted $R^2=0.974$ and predicted $R^2=0.9302$, with an
+insignificant lack of fit ($p=0.638$). Temperature lowers Purity ($-2.354$ per coded unit), Time raises it.
+
+\subsection{Diagnostics}
+On \ui{Diagnostics} the normal plot of the externally studentized residuals is straight (Shapiro--Wilk $p=0.904$), no
+residual exceeds the Bonferroni limit $\pm4.82$, and only runs 1 and 7 have Cook's distance above 1, the same runs as in
+the readiness report. \ui{Box-Cox} recommends no transformation ($\lambda=1$ lies inside the confidence interval).
+The models are adequate for optimization.
+
+% ======================================================================================================
+\section{Part A: ANN with checks A and B}
+\label{sec:ch11-ann-bbd}
+The lack of fit of Yield raises the question whether an ANN would do better. With 17 runs that is doubtful, and the
+checks of REGEN make the answer explicit.
+
+\begin{enumerate}
+  \item Open \ui{ANN}. The \ui{Data Adequacy} report runs automatically: Yield is \ui{Adequate with caveats} (only 17
+        runs, \ui{Caution}; training rows per weight 1.27, \ui{Caution}; signal/noise 15.43 and the significant lack of
+        fit rate the need for a nonlinear model as \ui{Good}). Purity is \ui{Adequate with many caveats - ANN results
+        need strict validation}: in addition run 8 is a response outlier (robust $z>3.5$).
+  \item Set \ui{CPU cores (parallel):} to 1 if you want exactly the numbers below, leave the other settings at their
+        defaults and click \ui{Optimize All Responses (One Click)}. This is \textbf{check~A}: a cross-validated
+        architecture search for each response.
+  \item Select each response in \ui{Show response:} and click \ui{Learning Curve (Enough Data?)}. This is
+        \textbf{check~B}.
+\end{enumerate}
+
+\textbf{Check~A result.} The status line reads \ui{Done. R1: 1 layer (4) - Good fit; R2: 1 layer (5) - Good fit}.
+For Yield, 26 architectures were evaluated with 5-fold cross-validation; the selected 3-4-1 network (21 weights) has a
+cross-validated training $R^2$ of 0.971 and test $R^2$ ($Q^2$) of 0.624. A 3-4-5-1 network had a slightly lower test
+error, but within one standard error, so the simpler network was kept (1-SE rule). 21 candidates were excluded as
+overfitting. On the same folds the quadratic RSM reaches $Q^2=0.598$, so the search reports \ui{ANN predicts new data
+better than RSM (assessed on the same test data)}, but the margin (0.624 against 0.598) is small. For Purity the
+selected 3-5-1 network has $Q^2=0.774$, while RSM reaches 0.818: \ui{RSM predicts new data as well as or better than
+ANN}.
+
+The \ui{Summary \& Diagnosis} tab of the Yield network shows \ui{Good fit (result of 5-fold cross-validation during
+architecture search)} and, as secondary information, the single train/test split of the final model (11 training,
+3 validation, 3 test runs): \ui{Overfitting}, test $R^2=-0.75$. The page itself warns that 6 validation and test runs
+are too few for this diagnosis; the cross-validated result is the one to use.
+
+\textbf{Check~B result.} For both responses the learning curve ends with \ui{Learning curve finished: too little data
+to assess}: \ui{Too little data (17 runs) for a reliable learning curve.} With the full data the ANN test $R^2$
+(median of 10 repeats on 3 test runs) is 0.552 for Yield and 0.315 for Purity, against 0.885 and 0.911 for RSM:
+\ui{RSM is more accurate at this data size}.
+
+\textbf{Conclusion of checks A and B for Part A.} The networks are not badly overfitted, but 17 runs do not support an
+ANN that is clearly better than the quadratic model. The RSM models remain the selected models (the check box
+\ui{When finished, use ANN for graphs/optimization} was left off). The ANNs are kept only for check~D.
+
+% ======================================================================================================
+\section{Part A: set goals and run the desirability optimization}
+\label{sec:ch11-desir}
+On \ui{Desirability} set both responses to \ui{Maximize}. Raise the lower limits to the values below which a result
+is of no interest, 75 for Yield and 89 for Purity; keep the upper limits at the data maxima (78.29 and 93.6), shape
+1.00, importance \ui{+++} and model \ui{RSM}. Click \ui{Run Optimization}.
+
+The result (Figure~\ref{fig:ch08-desirability} in Chapter~\ref{chap:8}) has five solutions with $D=0.845$--$0.862$. The best is
+70.265~°C, 89.781~min, 1.7975~\% with predicted Yield 78.29 ($d=1$) and Purity 92.416 ($d=0.743$), $D=0.862$. Yield is
+at its upper limit, so it is ``fully desirable''; all remaining freedom is used for Purity.
+
+% ======================================================================================================
+\section{Part A: NSGA-II and check C}
+\label{sec:ch11-nsga}
+On \ui{NSGA-II / III} the goals are already \ui{Maximize} for both responses (taken from the \ui{Desirability} page).
+Keep all defaults and click \ui{Run Optimization}. Then click \ui{Check Population Size}.
+
+\begin{itemize}
+  \item The automatic algorithm choice is NSGA-II (two objectives). The run stops automatically at generation 78 with
+        99 Pareto solutions (Figure~\ref{fig:ch08-front}). The front runs from Purity 94.9 at Yield 63.6 to Purity 89.6
+        at Yield 80.4.
+  \item TOPSIS chooses 71.527~°C, 88.239~min, 1.8783~\% (Yield 79.157, Purity 91.802); the knee point is 67.781~°C,
+        89.982~min, 1.5083~\% (Yield 75.766, Purity 93.483).
+  \item \textbf{Check~C, generations}: the convergence criterion was first met at generation 58, and in the last window
+        the mean hypervolume changed by $-0.029$~\% (limit 0.10~\%) with no shift of the ideal point:
+        \ui{Enough generations} (Figure~\ref{fig:ch08-convergence}).
+  \item \textbf{Check~C, population}: two other seeds change the hypervolume by at most 0.02~\%, a population of 200
+        adds 0.35~\%: \ui{Population: sufficient} (Table~\ref{tab:ch08-popcheck}). The TOPSIS choice moves by at most
+        5.5~\% of a factor range between these runs.
+\end{itemize}
+Check~C is passed. Note how desirability and NSGA relate: the best desirability solution (Yield 78.29, Purity 92.42)
+lies on the NSGA front between the knee and the TOPSIS point. The desirability result depends on the limits you chose;
+the front shows what other compromises are available.
+
+% ======================================================================================================
+\section{Part A: compare the ANN and RSM fronts (check D)}
+\label{sec:ch11-checkD}
+Click \ui{Compare ANN vs RSM}. The optimization runs twice, with RSM and with the ANNs of
+Section~\ref{sec:ch11-ann-bbd}. The results are shown in Figures~\ref{fig:ch08-cmp-front}--\ref{fig:ch08-cmp-report}
+of Chapter~\ref{chap:8}:
+\begin{itemize}
+  \item Mean prediction difference on the Pareto solutions: 22.4~\% of the data range for Yield (maximum 78.0~\%),
+        4.3~\% for Purity.
+  \item TOPSIS choices: RSM front 71.5~°C, 88.2~min, 1.88~\%; ANN front 65.3~°C, 90.0~min, 3.00~\%; distance
+        $dx=56$~\% of the factor range.
+  \item Hypervolume: 71.5~\% (RSM front, by RSM) and 82.4~\% (ANN front, by ANN); re-assessed by the other model 69.0~\%
+        and 57.6~\%.
+  \item Prediction accuracy on new data: RSM mean predicted $R^2$ 0.908 against ANN mean cross-validation $Q^2$
+        0.699.
+\end{itemize}
+\textbf{Check~D fails} with the red verdict \ui{The models differ considerably: \dots\ Do not rely on just one model:
+make confirmation runs at both TOPSIS points.}
+
+\textbf{What it means.} At its TOPSIS point the ANN predicts a Yield of 83.5, more than 5 units above the highest
+Yield ever measured (78.29), at a corner of the region (Time 90~min, Concentration 3~\%) where the BBD has no run. The
+RSM predicts 74.0 there. One of the two models extrapolates badly, and the evidence points to the ANN: checks A and B
+showed that 17 runs do not support it, its cross-validated $Q^2$ (0.62 and 0.77) is lower than the RSM predicted $R^2$
+(0.89 and 0.93), and its front loses much more hypervolume when re-assessed (82.4 to 57.6~\%) than the RSM front (71.5
+to 69.0~\%).
+
+\textbf{Action.} The optimum is taken from the RSM models. The disagreement is reported, and the confirmation plan
+(Section~\ref{sec:ch11-predict}) includes a run at the ANN TOPSIS point, which settles the question with little effort.
+
+% ======================================================================================================
+\section{Part A: sensitivity and parametric study}
+\label{sec:ch11-sens}
+On \ui{Sensitivity} choose \ui{Start from:} \ui{Best desirability solution} and \ui{Model:} \ui{Selected model of
+each response}. Run the four studies (details in Chapter~\ref{chap:9}):
+\begin{itemize}
+  \item \ui{Parametric Study}, \ui{All factors, one panel each} (Figure~\ref{fig:ch09-param-all}): Temperature
+        creates the conflict; between 60 and 80~°C Yield rises from 66.6 to 79.9 (at 76~°C) while Purity falls from
+        94.1 to 87.3.
+  \item \ui{Global Sensitivity}, Sobol indices with $N=8192$ (Figure~\ref{fig:ch09-sobol}): Temperature dominates
+        both responses ($S_T=0.599$ for Yield, 0.714 for Purity); Time is second for Yield (0.364) and Concentration for
+        Purity (0.151); interactions account for about 4~\% of the variance. The standardized coefficients
+        (Figure~\ref{fig:ch09-src}) have $R^2=0.70$ for Yield, too low to rank the factors by $\beta$ alone.
+  \item \ui{Local Sensitivity (Tornado)}, $\pm10$~\% (Figure~\ref{fig:ch09-tornado}): at the chosen setting
+        Temperature must be controlled most tightly (Yield swing 2.34, Purity swing $-1.40$ for $\pm2$~°C).
+  \item \ui{Pareto Front Trade-off} (Figure~\ref{fig:ch09-front}): moving along the front means moving Temperature
+        and Concentration together ($\rho=\pm0.998$ and $\pm0.980$); Time stays at about 90~min.
+\end{itemize}
+For the paper, these results support a simple statement: Temperature sets the balance between Yield and Purity, Time
+should be long, and Concentration fine-tunes Purity.
+
+% ======================================================================================================
+\section{Part A: prediction and confirmation plan}
+\label{sec:ch11-predict}
+On \ui{Desirability} select solution~1 and click \ui{Send Selected Solution to Prediction}. The \ui{Prediction \&
+Confirmation} page (Figure~\ref{fig:ch11-prediction}, 95~\% level, $n=3$ confirmation runs) shows:
+\begin{itemize}
+  \item Yield: prediction 78.29, standard error of the mean 0.430, CI 77.27--79.31, PI for the mean of 3 runs
+        76.88--79.70;
+  \item Purity: prediction 92.42, standard error 0.224, CI 91.89--92.95, PI 91.68--93.15.
+\end{itemize}
+The PI is the interval that the mean of the three confirmation runs should fall into if the model is right. In the
+screenshot, example confirmation means (78.69 and 92.12) have been typed in to show the result \ui{\checkmark\ Confirmed
+(inside PI)}; in a real study you enter your measured means.
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=\linewidth]{prediction.png}
+\caption{\ui{Prediction \& Confirmation} for the best desirability solution, 95~\%, $n=3$. The confirmation means are
+example values.}
+\label{fig:ch11-prediction}
+\end{figure}
+
+\textbf{Confirmation plan.} Because check~D failed, the plan contains two settings:
+\begin{enumerate}
+  \item Three runs at the chosen optimum (70.3~°C, 89.8~min, 1.80~\%). Accept the RSM model if both means fall inside
+        the PIs above.
+  \item One to three runs at the ANN TOPSIS point (65.3~°C, 90.0~min, 3.00~\%). Enter this point on the prediction
+        page: the RSM predicts Yield 73.97 with a PI (3 runs) of 72.1--75.8, whereas the ANN predicts 83.5. A measured
+        Yield near 74 confirms the RSM and refutes the ANN's promise; a Yield near 83 would mean the RSM misses a
+        better region and the design should be extended toward high Concentration.
+\end{enumerate}
+The \ui{Data Readiness} page also proposes confirmation runs around the optimum (\ui{Add Suggested Runs to Data
+Sheet}). After the runs, enter the results on the \ui{Data} page, refit and repeat the checks.
+
+% ======================================================================================================
+\section{Part B: dye adsorption, when an ANN is justified}
+\label{sec:ch11-dye}
+Open \ui{Dye Adsorption (ANN, 40 runs)} from \menupath{File $\rightarrow$ Case Studies\dots}. The data are 40
+historical runs with four factors (pH 2--10, adsorbent dose 0.5--4~g/L, contact time 10--120~min, initial concentration
+20--200~mg/L) and the response Removal Efficiency (\%).
+
+\subsection{Readiness and RSM}
+\ui{Data Readiness} rates the data \ui{Fair - some things need fixing} (modeling 82, optimization 77): there are no
+replicates (pure error df 0, \ui{Problem}), so the noise level and the lack of fit cannot be assessed. The quadratic RSM
+model (15 parameters) fits with $R^2=0.877$ but predicts new data poorly (predicted $R^2=0.562$): a sign that the
+response is more nonlinear than a quadratic surface.
+
+\subsection{Data adequacy}
+On \ui{ANN} the \ui{Data Adequacy} verdict is \ui{Adequate with caveats}: 40 runs (\ui{Good}), training rows per
+weight 2.62 for a 4-2-1 reference network (\ui{Caution}), factor correlation at most 0.25 (\ui{Good}), skewed response
+(skewness 0.85, max/min 21.4, \ui{Caution}), and no replicates for the signal-to-noise ratio (\ui{Info}). For the
+skewed response the page points out that a ln transform on the \ui{RSM Analysis} page would change only the RSM model:
+the ANN is trained on the response in its original units.
+
+\subsection{Check B: learning curve}
+Click \ui{Learning Curve (Enough Data?)} with the default network entry ``5'' (one hidden layer with 5 neurons)
+(Figure~\ref{fig:ch11-lc}). The ANN is trained on 30 to 100~\% of the training data (10 to 32 runs) and tested on
+8 runs never used for training, repeated 10 times. The median test $R^2$ rises from about 0 at 10 runs to 0.898 at 26
+and 0.876 at 32 runs; the RSM reaches only 0.429 on the same test runs. The page concludes \ui{More data would still
+help} and estimates about 100 runs in total (range 95 to 111), but adds that this estimate is unreliable because the
+fitted exponent lies at the edge of its search range. Read check~B here as: the ANN already clearly beats the RSM with
+40 runs, and more runs would still improve it; the exact number of runs is uncertain.
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=\linewidth]{ann_learning_curve.png}
+\caption{Check B for the dye case: learning curve of the ANN (test $R^2$ against training runs) compared with RSM.}
+\label{fig:ch11-lc}
+\end{figure}
+
+\subsection{Check A: architecture search}
+Click \ui{Search Architecture (This Response)} with the default search settings (Figure~\ref{fig:ch11-search}). Fifteen
+architectures are evaluated with 5-fold cross-validation. The first hidden layer stops growing at 5 neurons, and a
+second layer does not improve the test error by 1~\%. The selected network is 4-3-1 (19 weights): cross-validated
+training $R^2$ 0.987, test $R^2$ ($Q^2$) 0.938, \ui{Good fit}; the RSM reaches $Q^2=0.376$ on the same folds. Nine
+candidates were excluded as overfitting and three as underfitting.
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=\linewidth]{ann_search.png}
+\caption{Check A for the dye case: architecture search with 5-fold cross-validation; selected network 4-3-1.}
+\label{fig:ch11-search}
+\end{figure}
+
+The final 4-3-1 network is trained on a 28/6/6 split. The \ui{Summary \& Diagnosis} tab reports \ui{Good fit} from the
+cross-validation and, for the single final split, \ui{Overfitting} (error on new data 3.6 times the training error,
+test $R^2=0.853$). As in Part A, the cross-validated status is the diagnosis to use. The \ui{RSM vs ANN} tab gives
+$R^2=0.961$ for the ANN against 0.877 for RSM on all data, and the \ui{Factor Importance (Garson)} tab ranks pH first
+(68.2~\%), as expected for an adsorption process with a pH optimum.
+
+\textbf{Conclusion of Part B.} Here an ANN is justified: enough data (40 runs), a clearly nonlinear response that the
+quadratic model cannot capture ($Q^2$ 0.94 against 0.38), a network selected by cross-validation, and a learning curve
+that confirms the advantage. To use the network for graphs, optimization and prediction, tick \ui{Use this response's
+ANN for graphs, optimization, NSGA-II \& prediction}. Keep two limitations in mind: an ANN has no confidence or
+prediction intervals, so on the prediction page a confirmation run is judged by the rule $|\bar y-\hat y|\le5$~\% of the
+response data range; and the data have no replicates, so the noise level is unknown. Adding a few replicated runs and
+the runs suggested by \ui{Data Readiness} would strengthen the model. Multi-objective optimization and check~D need at
+least two responses and are therefore not part of this case.
+
+% ======================================================================================================
+\section{Export the data and the report}
+\label{sec:ch11-export}
+Everything shown in this chapter can be exported for a paper or a lab report:
+\begin{itemize}
+  \item every plot: \ui{Copy data} and \ui{Export data\dots} on the plot toolbar (right-click: \ui{Copy plot data},
+        \ui{Export plot data\dots}); the data behind each panel are written to the clipboard, an Excel workbook (one
+        sheet per series) or a CSV file, so the figure can be redrawn in another program;
+  \item every result table: right-click, \ui{Export table\dots} (Excel or CSV) or \ui{Copy entire table (for Excel)};
+  \item every report panel (ANOVA, check reports, sensitivity tables): right-click, \ui{Export all tables\dots};
+  \item the Pareto front with settings and convergence history: \ui{Export Pareto to Excel\dots} on the NSGA page;
+  \item the whole project: \menupath{File $\rightarrow$ Export to Excel\dots} and \menupath{File $\rightarrow$ PDF
+        Report\dots}.
+\end{itemize}
+The \ui{Summary} page (Figure~\ref{fig:ch11-summary}) collects the state of the project: factor and response tables
+(Yield and Purity both quadratic, \ui{Used RSM}), ``2 ANN models, desirability optimization results (5 solutions),
+NSGA-II results (99 Pareto solutions)'' and the notes. Save the project (\menupath{File $\rightarrow$ Save}); the models,
+optimization results, comparisons and search results are stored in the \texttt{.doe} file.
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=\linewidth]{summary.png}
+\caption{\ui{Summary} page of the BBD project at the end of the worked example.}
+\label{fig:ch11-summary}
+\end{figure}
+
+% ======================================================================================================
+\section{Checklist for reporting the study}
+\label{sec:ch11-checklist}
+\begin{table}[htbp]
+\centering
+\small
+\caption{What to report, with the values of the BBD example.}
+\label{tab:ch11-checklist}
+\begin{tabularx}{\linewidth}{@{}>{\raggedright\arraybackslash}p{2.6cm} >{\raggedright\arraybackslash}X@{}}
+\toprule
+Item & BBD extraction example \\
+\midrule
+Design and data & Box-Behnken, 3 factors, 17 runs, 5 center points; readiness \ui{Ready} (94/96 and 100/97). \\
+Models & Quadratic RSM; Yield $R^2$ 0.992, predicted $R^2$ 0.886, lack of fit $p=0.030$ (pure error 4 df); Purity $R^2$
+0.989, predicted $R^2$ 0.930. \\
+Check A & ANN 3-4-1 and 3-5-1 selected by 5-fold CV, $Q^2$ 0.624 and 0.774 (RSM on the same folds 0.598 and 0.818). \\
+Check B & ``Too little data to assess''; RSM more accurate at 17 runs. \\
+Desirability & Limits 75--78.29 and 89--93.6, importance equal, linear shape; $D=0.862$ at 70.3~°C, 89.8~min,
+1.80~\%. \\
+NSGA & NSGA-II, population 100, seed 1, automatic stop at generation 78, 99 solutions; TOPSIS 71.5~°C, 88.2~min,
+1.88~\%. \\
+Check C & Converged (gain $-0.029$~\% $<$ 0.10~\%); population sufficient (seed spread 0.02~\%, 2$\times$ population
++0.35~\%). \\
+Check D & Failed: $\Delta=22.4$~\% (Yield), $dx=56$~\%; RSM retained, confirmation at both TOPSIS points. \\
+Sensitivity & Sobol $S_T$: Temperature 0.60 / 0.71, Time 0.36 / 0.17, Concentration 0.08 / 0.15 (Yield / Purity). \\
+Confirmation & PI (95~\%, $n=3$): Yield 76.9--79.7, Purity 91.7--93.2 at the optimum; Yield 72.1--75.8 at the ANN TOPSIS
+point. \\
+\bottomrule
+\end{tabularx}
+\end{table}
