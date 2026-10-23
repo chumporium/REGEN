@@ -1,4 +1,5 @@
 """Design data sheet tab: factors (read-only) and responses (typed in or pasted from Excel)."""
+import itertools
 import math
 
 import numpy as np
@@ -7,6 +8,8 @@ from PySide6.QtGui import QBrush, QColor, QFont, QGuiApplication, QKeySequence
 from PySide6.QtWidgets import (QAbstractItemView, QCheckBox, QDialog, QDialogButtonBox, QDoubleSpinBox,
                                QFormLayout, QHeaderView, QLineEdit, QSpinBox, QComboBox, QHBoxLayout, QInputDialog, QLabel, QMessageBox,
                                QPushButton, QTableView, QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget)
+
+from doe import constraints as cons_mod
 
 from .copying import install_table_copy, system_decimal, table_rows, to_clipboard
 from .common import fmt, parse_float
@@ -242,9 +245,33 @@ class AugmentDialog(QDialog):
         self.chk_block.setChecked(k != "center")
 
     def apply(self):
-        return self.project.augment(self.cb_kind.currentData(), count=self.sp_count.value(),
-                                    new_block=self.chk_block.isChecked(),
-                                    alpha_type=self.cb_alpha.currentData(), factor=self.cb_fold.currentData())
+        p = self.project
+        kind = self.cb_kind.currentData()
+        if kind == "center" and p.is_mixture:
+            return p.add_runs(self.centroid_runs(self.sp_count.value()), "Centroid", self.chk_block.isChecked())
+        fraction = p.design_type == "fractional_factorial"
+        m = p.augment(kind, count=self.sp_count.value(), new_block=self.chk_block.isChecked(),
+                      alpha_type=self.cb_alpha.currentData(), factor=self.cb_fold.currentData())
+        if kind == "ccd" and fraction:
+            nk, frac = len(p.num_idx), p.options.get("fraction_p", 1)
+            p.options["augmented"][-1] += f" on a 2^({nk}-{frac}) fractional factorial core"
+        return m
+
+    def centroid_runs(self, count):
+        """Overall centroid of the (constrained) mixture region, with process factors at 0, for every categoric
+        level combination."""
+        p = self.project
+        comp, cats = p.comp_idx, p.cat_idx
+        lo, hi = p.coded_bounds()
+        G, h = p.constraint_system(cols=comp)
+        z = np.zeros(p.k)
+        z[comp] = cons_mod.region_centroid(lo[comp], hi[comp], G, h, True)
+        rows = []
+        for combo in itertools.product(*[range(len(p.factors[i].levels)) for i in cats]):
+            r = z.copy()
+            r[cats] = combo
+            rows += [r] * count
+        return np.array(rows)
 
 
 class InfoDialog(QDialog):
@@ -360,12 +387,20 @@ class SimulateDialog(QDialog):
         f.addRow("Response:", self.cb_resp)
         f.addRow("Equation:", self.txt)
         f.addRow("Factor units:", self.cb_units)
+        self.lbl_sd = QLabel("Not used: binomial and Poisson data get their random variation from the distribution.")
+        self.lbl_sd.setWordWrap(True)
+        self.lbl_sd.setStyleSheet("color: #555;")
         f.addRow("Noise (σ):", self.sp_sd)
+        f.addRow("", self.lbl_sd)
         f.addRow("Random seed:", self.sp_seed)
         f.addRow("", self.chk_empty)
-        note = QLabel("Use factor letters (A, B, C, ...), the operators + - * / ** and the functions exp, log, sqrt, "
-                      "sin, cos, abs. Categorical factors take their level index (0, 1, 2, ...). Binomial response: "
-                      "equation = probability (0–1); Poisson: equation = mean rate.")
+        self.form = f
+        note = QLabel("Use the factor letters (A, B, C, ...), numbers with \".\" as the decimal separator, the "
+                      "operators + - * / ** (or ^) and %, comparisons < > <= >= == != (true = 1, false = 0, e.g. "
+                      "5*(A > 0)), the functions exp, ln, log (natural log), log10, sqrt, sin, cos, tan, abs, "
+                      "min(a, b), max(a, b) and the constants pi and e. Use \",\" only between function arguments. "
+                      "Categorical factors take their level index (0, 1, 2, ...). Binomial response: equation = "
+                      "probability (0–1); Poisson: equation = mean rate. Noise (σ) applies to normal responses only.")
         note.setWordWrap(True)
         note.setStyleSheet("color: #555;")
         f.addRow(note)
@@ -375,16 +410,26 @@ class SimulateDialog(QDialog):
         bb.accepted.connect(self.apply)
         bb.rejected.connect(self.reject)
         f.addRow(bb)
+        self.cb_resp.currentIndexChanged.connect(self.sync_noise)
+        self.sync_noise()
+
+    def sync_noise(self):
+        """The noise σ only applies to normal responses."""
+        j = self.cb_resp.currentIndex()
+        normal = j < 0 or self.project.response_family(j) == "normal"
+        self.sp_sd.setEnabled(normal)
+        self.form.setRowVisible(self.lbl_sd, not normal)
 
     def apply(self):
         from doe.simulate import simulate
         try:
+            notes = []
             n = simulate(self.project, self.cb_resp.currentIndex(), self.txt.text(), self.cb_units.currentData(),
-                         self.sp_sd.value(), self.sp_seed.value(), self.chk_empty.isChecked())
+                         self.sp_sd.value(), self.sp_seed.value(), self.chk_empty.isChecked(), notes=notes)
         except (ValueError, ZeroDivisionError, TypeError) as exc:
             QMessageBox.warning(self, "Simulation", str(exc))
             return
-        QMessageBox.information(self, "Simulation", f"{n} response values filled.")
+        QMessageBox.information(self, "Simulation", f"{n} response values filled." + "".join("\n\n" + s for s in notes))
         self.accept()
 
 

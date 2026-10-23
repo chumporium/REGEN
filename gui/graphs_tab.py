@@ -172,6 +172,8 @@ class GraphsTab(QWidget):
             "perturbation": "All numeric factors are moved away from the reference point (the values below are "
                             "the reference for categorical factors).",
             "interaction": "Non-parallel lines = interaction present. Error bars = 95% CI.",
+            "allfactors": "Numeric factors are held at the center of their range. Choose below the level at which "
+                          "each categorical factor is held in the panels of the other factors.",
         }
         base = "Red points = design runs in this slice (number = replicate count). "
         if self.project.is_mixture:
@@ -188,6 +190,8 @@ class GraphsTab(QWidget):
         self.slice_widgets = []
         p = self.project
         used = self.axes()
+        if self.kind() == "allfactors":
+            used = list(p.num_idx)          # categorical factors still need a reference level
         center = np.nanmean(p.coded, axis=0) if p.is_mixture else None
         for i in range(p.k):
             if i in used:
@@ -217,7 +221,8 @@ class GraphsTab(QWidget):
             self.f_slice.addRow(p.factor_label(i) + ":", w)
             self.slice_widgets.append((i, w))
         self.g_slice.setVisible(bool(self.slice_widgets))
-        self.g_slice.setTitle("Other Components (Actual Units)" if p.is_mixture else "Other Factor Values")
+        self.g_slice.setTitle("Other Components (Actual Units)" if p.is_mixture else
+                              "Reference Levels" if self.kind() == "allfactors" else "Other Factor Values")
 
     def base(self):
         p = self.project
@@ -282,7 +287,8 @@ class GraphsTab(QWidget):
             plots.draw_trace(fig, p, fit, label)
         elif kind == "poe":
             if not p.has_poe:
-                self.canvas.message("Enter the factor standard deviations first (Data page → Factors & Responses).")
+                self.canvas.message("Enter the factor standard deviations first "
+                                    "(Data page → Factor & Response Info...).")
                 return
             plots.draw_poe(fig, p, fit, axes, base, label, self.sp_levels.value(), mark)
         self.canvas.draw()

@@ -1,7 +1,7 @@
 """Analysis tab: Fit Summary, term selection, transformation, ANOVA, equation, diagnostics, Box-Cox."""
 import numpy as np
 from PySide6.QtCore import Qt, Signal
-from PySide6.QtWidgets import (QComboBox, QDoubleSpinBox, QHBoxLayout, QLabel, QListWidget,
+from PySide6.QtWidgets import (QCheckBox, QComboBox, QDoubleSpinBox, QHBoxLayout, QLabel, QListWidget,
                                QListWidgetItem, QPushButton, QSplitter, QTabWidget, QVBoxLayout, QWidget)
 
 from doe import models
@@ -21,6 +21,7 @@ class AnalysisTab(QWidget):
         self._loading = False
         self._suggested = None
         self._bc = None
+        self._order_alias = {}
 
         lay = QVBoxLayout(self)
         bar = QHBoxLayout()
@@ -78,6 +79,12 @@ class AnalysisTab(QWidget):
         ll.addWidget(QLabel("Model terms (checked = in model):"))
         self.lst_terms = QListWidget()
         ll.addWidget(self.lst_terms)
+        self.chk_hier = QCheckBox("Maintain hierarchy")
+        self.chk_hier.setChecked(True)
+        self.chk_hier.setToolTip("Selecting a term also selects its parent terms (A and B for AB); removing a term "
+                                 "also removes the terms that contain it. Applies to the term list and to clicks "
+                                 "on the effects plot.")
+        ll.addWidget(self.chk_hier)
         split.addWidget(left)
 
         self.tabs = QTabWidget()
@@ -141,6 +148,7 @@ class AnalysisTab(QWidget):
         self.lst_terms.itemChanged.connect(self.on_terms_changed)
         self.btn_backward.clicked.connect(self.on_backward)
         self.btn_suggest.clicked.connect(self.on_suggest)
+        self.chk_hier.toggled.connect(self.on_hierarchy_toggled)
         self.cb_tr.currentIndexChanged.connect(self.on_transform_changed)
         self.sp_lam.valueChanged.connect(self.on_transform_changed)
         self.sp_shift.valueChanged.connect(self.on_transform_changed)
@@ -152,7 +160,16 @@ class AnalysisTab(QWidget):
         self.tabs.setTabVisible(self.tabs.indexOf(self.eff_tab), project.is_two_level_factorial)
         self._loading = True
         self.cb_order.clear()
+        # orders with the same terms as an earlier order are not listed (for example 2FI = Linear with
+        # one process factor); a saved order of that kind is shown as its equivalent
+        self._order_alias = {}
+        seen = {}
         for o in project.available_orders():
+            key = frozenset(t for t in project.terms_for_order(o) if not models.is_intercept(t))
+            if key in seen:
+                self._order_alias[o] = seen[key]
+                continue
+            seen[key] = o
             self.cb_order.addItem(models.order_label(o), o)
         self._loading = False
         self.refresh_responses()
@@ -181,7 +198,8 @@ class AnalysisTab(QWidget):
         spec = self.project.model_spec(self.resp())
         tr = spec.get("transform") or {"kind": "none"}
         self._loading = True
-        self.cb_order.setCurrentIndex(max(self.cb_order.findData(spec["order"]), 0))
+        order = self._order_alias.get(spec["order"], spec["order"])
+        self.cb_order.setCurrentIndex(max(self.cb_order.findData(order), 0))
         self.cb_tr.setCurrentIndex(max(self.cb_tr.findData(tr.get("kind", "none")), 0))
         self.sp_lam.setValue(float(tr.get("lam", 1.0)))
         self.sp_shift.setValue(float(tr.get("shift", 0.0)))
@@ -250,16 +268,53 @@ class AnalysisTab(QWidget):
             self.lst_terms.addItem(it)
         self._loading = False
 
-    def on_terms_changed(self):
+    def _hierarchy(self, sel, t, add, universe):
+        """Add the parent terms of t (add=True) or remove the terms that contain t (add=False)."""
+        k = self.project.k
+        sel = set(sel)
+        if add:
+            sel.add(t)
+            sel |= {o for o in universe if models.contains(o, t, k)}
+        else:
+            sel.discard(t)
+            sel -= {o for o in sel if models.contains(t, o, k)}
+        return sel
+
+    def on_terms_changed(self, item=None):
         if self._loading:
             return
+        items = [self.lst_terms.item(i) for i in range(self.lst_terms.count())]
+        listed = [models.normalize_term(it.data(Qt.UserRole)) for it in items]
+        checked = {t for t, it in zip(listed, items) if it.checkState() == Qt.Checked}
+        refill = False
+        if item is not None and self.chk_hier.isChecked():
+            t = models.normalize_term(item.data(Qt.UserRole))
+            checked = self._hierarchy(checked, t, item.checkState() == Qt.Checked, listed)
+            self._loading = True
+            for tt, it in zip(listed, items):
+                if it.flags() & Qt.ItemIsEnabled:
+                    it.setCheckState(Qt.Checked if tt in checked else Qt.Unchecked)
+            self._loading = False
+            refill = bool(checked - set(listed))
         terms = [] if self.project.is_mixture else [tuple([0] * self.project.k)]
-        for i in range(self.lst_terms.count()):
-            it = self.lst_terms.item(i)
-            if it.checkState() == Qt.Checked:
-                terms.append(models.normalize_term(it.data(Qt.UserRole)))
+        terms += [t for t in listed if t in checked]
+        terms += sorted(checked - set(listed), key=models._term_sort_key)
         self.project.model_spec(self.resp())["terms"] = terms
+        if refill:
+            self.fill_terms()
         self._changed()
+
+    def on_hierarchy_toggled(self, on):
+        """Turning hierarchy on adds the missing parent terms of the current model."""
+        if not on or self.project is None or self.resp() < 0:
+            return
+        sel = self._selected_terms()
+        full = set(sel)
+        universe = set(self.project.terms_for_order(self.project.model_spec(self.resp())["order"])) | sel
+        for t in sel:
+            full = self._hierarchy(full, t, True, universe)
+        if full != sel:
+            self._set_terms(full)
 
     def on_backward(self):
         p = self.project
@@ -309,12 +364,20 @@ class AnalysisTab(QWidget):
         self._suggested = suggested
         self.btn_suggest.setEnabled(suggested != "mean")
         self.txt_summary.setHtml(REPORT_CSS + report.summary_html(p, j, rows, suggested))
-        self.txt_anova.setHtml(REPORT_CSS + report.anova_html(p, j, fit))
+        html = report.anova_html(p, j, fit)
+        warnings = getattr(fit, "warnings", None)
+        if warnings:
+            self.lbl_err.setText("The GLM fit has warnings - see the GLM (Logistic/Poisson) tab.")
+            if warnings[0] not in html:
+                block = "".join(f"<p class='ns'><b>Warning:</b> {w}</p>" for w in warnings)
+                i = html.find("</h2>")
+                html = html[:i + 5] + block + html[i + 5:] if i >= 0 else block + html
+        self.txt_anova.setHtml(REPORT_CSS + html)
         self.txt_equation.setHtml(REPORT_CSS + report.equation_html(p, j, fit))
 
         self.diag.set_fit(p, fit, j)
 
-        self._bc = p.box_cox(j)
+        self._bc = self._box_cox(j)
         tr = p.model_spec(j).get("transform") or {}
         cur = {"none": 1.0, "sqrt": 0.5, "ln": 0.0, "log10": 0.0, "inverse": -1.0}.get(
             tr.get("kind", "none"), tr.get("lam", 1.0))
@@ -324,11 +387,34 @@ class AnalysisTab(QWidget):
         self.boxcox.draw()
         rec = models.recommend_transform(self._bc)
         self.btn_bc.setEnabled(rec is not None)
-        if rec is None:
+        bc = self._bc
+        if bc is None:
             self.lbl_bc.setText("Box-Cox is not available for this response.")
-        else:
-            self.lbl_bc.setText(f"Recommendation: <b>{models.transform_label(rec)}</b>. "
-                                "If λ = 1 lies inside the CI, no transformation is needed.")
+            return
+        lam = np.asarray(bc["lambdas"])
+        rng = f"{lam.min():g} to {lam.max():g}"
+        k = bc.get("shift", 0.0)
+        tail = f" Computed for y + k with k = {k:g}." if k else ""
+        if rec is None:
+            self.lbl_bc.setText(f"No recommendation: the smallest residual SS lies at the edge of the λ range "
+                                f"({rng}), so the 95% CI is open on that side and no reliable λ can be given. "
+                                "Check the model (lack of fit, outliers) before choosing a transformation." + tail)
+            return
+        edge = " or ".join(s for s, e in zip(("lower", "upper"), bc.get("edge", (False, False))) if e)
+        note = (f" The CI reaches the {edge} end of the λ range ({rng}), so it continues beyond the plotted range."
+                if edge else "")
+        self.lbl_bc.setText(f"Recommendation: <b>{models.transform_label(rec)}</b>. "
+                            "If λ = 1 lies inside the CI, no transformation is needed." + note + tail)
+
+    def _box_cox(self, j):
+        """Box-Cox for y + k (k = constant of the current transformation). Ordinary least squares only."""
+        p = self.project
+        if p.analysis_kind(j) != "ols":
+            return None
+        tr = p.model_spec(j).get("transform") or {}
+        k = float(tr.get("shift", 0.0) or 0.0) if tr.get("kind", "none") != "none" else 0.0
+        return models.box_cox(p.coded, p.model_data[:, j], p.model_terms(j), mixture=p.is_mixture,
+                              blocks=p.blocks if p.n_blocks > 1 else None, space=p.space, shift=k)
 
     def on_excluded(self):
         """Runs ignored/restored: all models are recomputed without those runs."""
@@ -355,7 +441,11 @@ class AnalysisTab(QWidget):
         fig = self.effplot.figure
         fig.clear()
         try:
-            self._eff = p.effects(self.resp())
+            # Plackett-Burman: two-factor interactions are partially aliased with main effects, so only main
+            # effects are estimated; the unassigned columns form the error estimate
+            pb = p.design_type == "plackett_burman"
+            self._eff = models.factorial_effects(p.coded, p.model_data[:, self.resp()], p.space,
+                                                 max_order=1 if pb else None)
         except (ValueError, np.linalg.LinAlgError) as exc:
             self._eff = None
             self.effplot.message(str(exc))
@@ -370,8 +460,11 @@ class AnalysisTab(QWidget):
             self._eff_pts = (xs, q, order)
         self.effplot.draw()
         e = self._eff
-        self.lbl_eff.setText(f"PSE Lenth = {e['pse']:.4g}, ME = {e['me']:.4g}, SME = {e['sme']:.4g}. "
-                             "Click a point to add the term to or remove it from the model."
+        self.lbl_eff.setText(f"PSE Lenth = {e['pse']:.4g}, ME = {e['me']:.4g}, SME = {e['sme']:.4g} (Lenth 1989). "
+                             "Effect = 2 × coded coefficient. "
+                             + ("Plackett-Burman design: only main effects are shown, because two-factor "
+                                "interactions are partially aliased with them. " if pb else "")
+                             + "Click a point to add the term to or remove it from the model."
                              + (" Aliased terms: " + ", ".join(models.term_name(t) for t in e["aliased"])
                                 if e["aliased"] else ""))
 
@@ -388,7 +481,10 @@ class AnalysisTab(QWidget):
             return
         t = self._eff["terms"][order[i]]
         sel = self._selected_terms()
-        sel.symmetric_difference_update({t})
+        if self.chk_hier.isChecked():
+            sel = self._hierarchy(sel, t, t not in sel, set(self._eff["terms"]) | sel)
+        else:
+            sel.symmetric_difference_update({t})
         self._set_terms(sel)
 
     def auto_effects(self):

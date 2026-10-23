@@ -108,7 +108,9 @@ def draw_diagnostics(fig, fit, run):
     ax.scatter(fit.yhat[valid], r[valid], s=msize(fit.n), color=BLUE, rasterized=fit.n > 2000)
     _limit_lines(ax, fit)
     ax.set_title("Residuals vs Predicted")
-    ax.set_xlabel("Predicted")
+    fam = getattr(fit, "family", None)
+    ax.set_xlabel(f"Linear predictor ({'logit' if fam == 'binomial' else 'log'} scale)"
+                  if fam in ("binomial", "poisson") else "Predicted")
     ax.set_ylabel("Ext. studentized residuals")
 
     o = np.argsort(run)
@@ -122,21 +124,27 @@ def draw_diagnostics(fig, fit, run):
     ax.set_xlabel("Run number")
     ax.set_ylabel("Ext. studentized residuals")
 
+    from .diagnostics import fitted_scale
     ax = axs[0, 3]
-    ax.scatter(fit.y, fit.yhat, s=msize(fit.n), color=BLUE, rasterized=fit.n > 2000)
-    lo, hi = min(fit.y.min(), fit.yhat.min()), max(fit.y.max(), fit.yhat.max())
+    act, pred, act_lab, pred_lab = fitted_scale(fit)
+    ax.scatter(act, pred, s=msize(fit.n), color=BLUE, rasterized=fit.n > 2000)
+    lo, hi = min(act.min(), pred.min()), max(act.max(), pred.max())
     ax.plot([lo, hi], [lo, hi], color=RED, lw=1)
     ax.set_title("Predicted vs Actual")
-    ax.set_xlabel("Actual")
-    ax.set_ylabel("Predicted")
+    ax.set_xlabel(act_lab)
+    ax.set_ylabel(pred_lab)
 
+    not_computed = "Not computed for\nsplit-plot (REML) models"
     ax = axs[1, 0]
-    _stems(ax, run[o], np.nan_to_num(fit.cooks[o]), BLUE)
-    ax.axhline(1.0, color=RED, lw=1, ls="--", label="limit 1.0")
-    ax.axhline(4 / fit.n, color="#e08e0b", lw=1, ls=":", label="4/n")
+    if fit.has_influence:
+        _stems(ax, run[o], np.nan_to_num(fit.cooks[o]), BLUE)
+        ax.axhline(1.0, color=RED, lw=1, ls="--", label="limit 1.0")
+        ax.axhline(4 / fit.n, color="#e08e0b", lw=1, ls=":", label="4/n")
+        ax.legend(fontsize=7)
+    else:
+        ax.text(0.5, 0.5, not_computed, ha="center", va="center", transform=ax.transAxes, color="#555")
     ax.set_title("Cook's Distance")
     ax.set_xlabel("Run number")
-    ax.legend(fontsize=7)
 
     ax = axs[1, 1]
     _stems(ax, run[o], fit.leverage[o], BLUE)
@@ -147,11 +155,14 @@ def draw_diagnostics(fig, fit, run):
     ax.legend(fontsize=7)
 
     ax = axs[1, 2]
-    _stems(ax, run[o], np.nan_to_num(fit.dffits[o]), BLUE)
-    lim = 2 * np.sqrt(fit.p / fit.n)
-    for s in (-lim, lim):
-        ax.axhline(s, color=RED, lw=1, ls="--")
-    ax.axhline(0, color="#888", lw=0.8)
+    if fit.has_influence:
+        _stems(ax, run[o], np.nan_to_num(fit.dffits[o]), BLUE)
+        lim = 2 * np.sqrt(fit.p / fit.n)
+        for s in (-lim, lim):
+            ax.axhline(s, color=RED, lw=1, ls="--")
+        ax.axhline(0, color="#888", lw=0.8)
+    else:
+        ax.text(0.5, 0.5, not_computed, ha="center", va="center", transform=ax.transAxes, color="#555")
     ax.set_title("DFFITS")
     ax.set_xlabel("Run number")
 
@@ -167,27 +178,15 @@ def draw_diagnostics(fig, fit, run):
     lines = ["Diagnostics summary", "",
              f"n = {fit.n},  p = {fit.p}",
              f"Shapiro-Wilk p = {sw:.3f}" if not np.isnan(sw) else "Shapiro-Wilk: -",
-             f"Max Cook's = {np.nanmax(fit.cooks):.3f}" if np.isfinite(np.nanmax(fit.cooks)) else "",
+             f"Max Cook's = {np.nanmax(fit.cooks):.3f}" if np.isfinite(fit.cooks).any() else "",
              f"Max leverage = {fit.leverage.max():.3f}",
              f"Outliers (|t| > Bonferroni limit): {n_out}"]
     ax.text(0.02, 0.95, "\n".join(lines), va="top", fontsize=9, family="monospace")
 
 
-def draw_leverage(fig, fit, run):
-    ax = fig.add_subplot(111)
-    o = np.argsort(run)
-    _stems(ax, run[o], fit.leverage[o], BLUE)
-    ax.axhline(2 * fit.p / fit.n, color=RED, lw=1, ls="--", label="2p/n")
-    ax.set_ylim(0, 1.05)
-    ax.set_title("Leverage")
-    ax.set_xlabel("Run number")
-    ax.legend()
-    ax.grid(alpha=0.3)
-
-
 def draw_box_cox(fig, bc, current_lam=None):
     if bc is None:
-        _message(fig, "The Box-Cox plot needs all response values > 0\n(and at least 3 data points).")
+        _message(fig, "The Box-Cox plot needs all values of y + k > 0\n(and at least 3 data points).")
         return
     ax = fig.add_subplot(111)
     ax.plot(bc["lambdas"], bc["lnss"], color=BLUE, lw=2)
@@ -195,12 +194,21 @@ def draw_box_cox(fig, bc, current_lam=None):
         ax.axhline(bc["threshold"], color=RED, ls="--", lw=1, label="95% CI limit")
         lo, hi = bc["ci"]
         ax.axvspan(lo, hi, color="#1a7f37", alpha=0.08)
-    ax.axvline(bc["best"], color="#1a7f37", lw=1.5, label=f"Best λ = {bc['best']:.2f}")
+    if bc.get("best_at_edge"):
+        ax.axvline(bc["best"], color="#1a7f37", lw=1.5, label=f"Minimum at the edge of the λ range ({bc['best']:.2f})")
+    else:
+        ax.axvline(bc["best"], color="#1a7f37", lw=1.5, label=f"Best λ = {bc['best']:.2f}")
     if current_lam is not None:
         ax.axvline(current_lam, color="#333", lw=1.2, ls=":", label=f"Current λ = {current_lam:g}")
     lo, hi = bc["ci"]
-    ax.set_title(f"Box-Cox - 95% CI for λ: {lo:.2f} to {hi:.2f}")
-    ax.set_xlabel("λ (lambda)")
+    lam = np.asarray(bc["lambdas"])
+    edge_lo, edge_hi = bc.get("edge", (False, False))
+    ci_lo = f"< {lo:.2f}" if edge_lo else f"{lo:.2f}"
+    ci_hi = f"> {hi:.2f}" if edge_hi else f"{hi:.2f}"
+    ax.set_title(f"Box-Cox - 95% CI for λ: {ci_lo} to {ci_hi}" if not np.isnan(lo) else "Box-Cox")
+    ax.set_xlim(lam.min(), lam.max())
+    k = bc.get("shift", 0.0)
+    ax.set_xlabel("λ (lambda)" + (f", transform of y {k:+g}" if k else ""))
     ax.set_ylabel("ln(SS residual)")
     ax.grid(alpha=0.3)
     ax.legend()
@@ -217,7 +225,7 @@ def draw_half_normal(fig, eff, selected, normal=False):
         order = np.argsort(e)
         q = stats.norm.ppf((np.arange(1, m + 1) - 0.5) / m)
         xs = e[order]
-        ax.set_xlabel("Standardized effect")
+        ax.set_xlabel("Effect")
         ax.set_ylabel("Normal probability (%)")
         ticks = [0.01, 0.05, 0.2, 0.5, 0.8, 0.95, 0.99]
         ax.set_yticks(stats.norm.ppf(ticks))
@@ -226,7 +234,7 @@ def draw_half_normal(fig, eff, selected, normal=False):
         order = np.argsort(np.abs(e))
         q = stats.halfnorm.ppf((np.arange(1, m + 1) - 0.5) / m)
         xs = np.abs(e)[order]
-        ax.set_xlabel("|Standardized effect|")
+        ax.set_xlabel("|Effect|")
         ax.set_ylabel("Half-normal (%)")
         ticks = [0.1, 0.3, 0.5, 0.7, 0.8, 0.9, 0.95, 0.99]
         ax.set_yticks(stats.halfnorm.ppf(ticks))
@@ -243,24 +251,43 @@ def draw_half_normal(fig, eff, selected, normal=False):
         if np.isfinite(slope) and slope > 0:
             qq = np.array([q.min() if normal else 0, q.max()])
             ax.plot(qq * slope, qq, color=RED, lw=1, ls="--")
+    _lenth_lines(ax, eff, both_sides=normal)
     ax.set_title("Normal Plot of Effects" if normal else "Half-Normal Plot of Effects")
     ax.grid(alpha=0.3)
     ax.legend(loc="lower right", fontsize=8)
     return ax, xs, q, order
 
 
+def _lenth_lines(ax, eff, both_sides=False):
+    """Lenth (1989) margin of error (ME) and simultaneous margin of error (SME) as vertical lines."""
+    for val, style, lab in ((eff["me"], "--", "ME"), (eff["sme"], ":", "SME")):
+        if not np.isfinite(val) or val <= 0:
+            continue
+        ax.axvline(val, color="#7c3aed", ls=style, lw=1.2, label=f"{lab} (Lenth) = {val:.3g}")
+        if both_sides:
+            ax.axvline(-val, color="#7c3aed", ls=style, lw=1.2)
+
+
 def draw_pareto(fig, eff, selected):
+    """Pareto chart of |t|. Without residual df, t = |effect| / PSE and the lines are Lenth's ME and SME."""
     ax = fig.add_subplot(111)
     t = np.asarray(eff["t"])
     order = np.argsort(-t)
     names = [models.term_name(eff["terms"][i]) for i in order]
     colors = ["#e08e0b" if eff["terms"][i] in selected else BLUE for i in order]
     ax.bar(range(len(order)), t[order], color=colors)
-    ax.axhline(eff["t_limit"], color=RED, ls="--", lw=1, label=f"t limit = {eff['t_limit']:.3g}")
-    ax.axhline(eff["bonferroni"], color="#333", ls=":", lw=1, label=f"Bonferroni = {eff['bonferroni']:.3g}")
+    if eff["df_resid"] <= 0:
+        ax.axhline(eff["t_limit"], color=RED, ls="--", lw=1,
+                   label=f"ME (Lenth): t = {eff['t_limit']:.3g}, effect = {eff['me']:.3g}")
+        ax.axhline(eff["bonferroni"], color="#333", ls=":", lw=1,
+                   label=f"SME (Lenth): t = {eff['bonferroni']:.3g}, effect = {eff['sme']:.3g}")
+        ax.set_ylabel("|Effect| / PSE")
+    else:
+        ax.axhline(eff["t_limit"], color=RED, ls="--", lw=1, label=f"t limit = {eff['t_limit']:.3g}")
+        ax.axhline(eff["bonferroni"], color="#333", ls=":", lw=1, label=f"Bonferroni = {eff['bonferroni']:.3g}")
+        ax.set_ylabel("|t| of effect")
     ax.set_xticks(range(len(order)))
     ax.set_xticklabels(names, rotation=90 if len(order) > 12 else 0)
-    ax.set_ylabel("|t| of effect")
     ax.set_title("Pareto Chart" + (" (based on Lenth's PSE)" if eff["df_resid"] <= 0 else ""))
     ax.legend()
     ax.grid(axis="y", alpha=0.3)

@@ -118,7 +118,12 @@ class NewDesignDialog(QDialog):
         self.sp_extra_pts.setRange(0, 5000)
         self.sp_extra_pts.setValue(12)
         self.sp_extra_pts.setToolTip("Additional points that fill the gaps of the base design (maximin), for ANN.")
-        self._seed = int(np.random.default_rng().integers(1, 1_000_000))
+        self.sp_seed = QSpinBox()
+        self.sp_seed.setRange(1, 999_999_999)
+        self.sp_seed.setValue(int(np.random.default_rng().integers(1, 1_000_000)))
+        self.sp_seed.setToolTip("Used for the random run order, the whole-plot order (split-plot) and the "
+                                "random parts of optimal, Latin Hypercube and hybrid designs. Note it, or type a "
+                                "fixed value, to create the same design again.")
         rows = [("Center points:", self.sp_center), ("Replicates:", self.sp_rep), ("Blocks:", self.cb_blocks),
                 ("Fraction:", self.cb_fraction), ("Alpha value:", self.cb_alpha), ("Custom alpha:", self.sp_alpha),
                 ("Lattice degree (m):", self.sp_degree), ("Mixture total:", self.sp_total),
@@ -129,7 +134,7 @@ class NewDesignDialog(QDialog):
                 ("Orthogonal array:", self.cb_taguchi), ("Process factors:", self.sp_proc),
                 ("", self.chk_split), ("Hard-to-change factors:", self.txt_htc), ("Runs per whole plot:", self.sp_wp),
                 ("Latin Hypercube points:", self.sp_lhs), ("Base design:", self.cb_hybrid),
-                ("Space-filling points:", self.sp_extra_pts)]
+                ("Space-filling points:", self.sp_extra_pts), ("Random seed:", self.sp_seed)]
         for lab, w in rows:
             self.f_opt.addRow(lab, w)
         top.addWidget(g_opt, 3)
@@ -419,10 +424,11 @@ class NewDesignDialog(QDialog):
         if t == "dsd":
             return {}
         if t == "lhs":
-            return {"lhs_runs": self.sp_lhs.value(), "center_points": self.sp_center.value(), "design_seed": self._seed}
+            return {"lhs_runs": self.sp_lhs.value(), "center_points": self.sp_center.value(),
+                    "design_seed": self.sp_seed.value()}
         if t == "hybrid":
             return {"hybrid_base": self.cb_hybrid.currentData(), "extra_points": self.sp_extra_pts.value(),
-                    "center_points": self.sp_center.value(), "design_seed": self._seed}
+                    "center_points": self.sp_center.value(), "design_seed": self.sp_seed.value()}
         if t == "taguchi":
             return {"taguchi_array": self.cb_taguchi.currentData()}
         if t in OPTIMAL:
@@ -663,13 +669,15 @@ class NewDesignDialog(QDialog):
         if self.chk_split.isChecked() and t in SPLIT_OK and not self._htc():
             QMessageBox.warning(self, "Split-plot", "Enter the letters of the hard-to-change factors (e.g. A).")
             return
+        seed = self.sp_seed.value()
         QApplication.setOverrideCursor(Qt.WaitCursor)
         try:
-            self.project = Project.create(t, factors, responses, **extra, **self.options())
+            self.project = Project.create(t, factors, responses, seed=seed, **extra, **self.options())
         except (ValueError, np.linalg.LinAlgError) as exc:
             QApplication.restoreOverrideCursor()
             QMessageBox.warning(self, "Design Could Not Be Created", str(exc))
             return
         QApplication.restoreOverrideCursor()
+        self.project.options["seed"] = seed
         self.project.dirty = True
         self.accept()

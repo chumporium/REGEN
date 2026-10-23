@@ -260,7 +260,10 @@ class MainWindow(QMainWindow):
         self.act_export = self._action(m, "Export to &Excel...", self.export_excel, None, "excel")
         self.act_pdf = self._action(m, "&PDF Report...", self.export_pdf, None, "pdf")
         m.addSeparator()
-        self._action(m, "E&xit", self.close, QKeySequence.Quit)
+        if QKeySequence.keyBindings(QKeySequence.Quit):
+            self._action(m, "E&xit", self.close, QKeySequence.Quit)
+        else:   # Windows has no standard Quit key: show Alt+F4, which Windows itself handles
+            self._action(m, "E&xit\tAlt+F4", self.close)
 
         view = mb.addMenu("&View")
         group = None

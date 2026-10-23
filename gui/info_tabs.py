@@ -27,14 +27,15 @@ def summary_html(p):
          f"<p class='note' style='margin: 2px'>{p.n} runs ({complete} with complete factors"
          + (f", {len(p.excluded)} excluded from the analysis" if p.excluded else "") + ")"
          + (f" · {p.n_blocks} blocks" if p.n_blocks > 1 else "")
-         + (f" · split-plot, {int(p.groups.max()) + 1} whole plots" if p.is_split_plot else "")
-         + (f" · mixture total {fmt(p.mixture_total)}" if p.is_mixture else "") + "</p></div>"]
+         + (f" · split-plot, {len(np.unique(p.groups))} whole plots" if p.is_split_plot else "")
+         + (f" · mixture total {fmt(p.mixture_total)}" if p.is_mixture else "")
+         + (f" · random seed {p.options['seed']}" if p.options.get("seed") is not None else "") + "</p></div>"]
     if p.constraints:
         h.append("<p><b>Constraints:</b> " + "; ".join(c["text"] for c in p.constraints) + "</p>")
     act = p.actual
     h.append("<h3>Factors</h3><table><tr><th class='l'>Factor</th><th class='l'>Name</th><th class='l'>Units</th>"
              "<th class='l'>Type</th><th>Low</th><th>High</th><th>Data min</th><th>Data max</th>"
-             "<th>Mean</th><th>SD</th><th>Unique levels</th><th>SD / u (POE)</th></tr>")
+             "<th>Mean</th><th>SD</th><th>Unique levels</th><th>POE σ</th></tr>")
     for i, f in enumerate(p.factors):
         v = act[:, i]
         v = v[np.isfinite(v)]
@@ -454,14 +455,7 @@ P_COLORS = [(0.01, "#86efac"), (0.05, "#d9f99d"), (0.10, "#fef08a")]
 
 
 def coef_pvalues(p, j, fit):
-    se = fit.coef_se
-    beta = fit.beta[fit.term_idx]
-    with np.errstate(divide="ignore", invalid="ignore"):
-        t = beta / se
-    if p.analysis_kind(j) == "glm":
-        return beta, 2 * stats.norm.sf(np.abs(t))
-    df = max(int(fit.df_resid), 1)
-    return beta, 2 * stats.t.sf(np.abs(t), df)
+    return fit.coef, fit.coef_tests()["p"]
 
 
 def coef_table_html(p, show_p=True):

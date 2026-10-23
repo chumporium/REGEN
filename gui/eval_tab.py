@@ -89,15 +89,16 @@ class EvalTab(QWidget):
             potential = p.terms_for_order(higher) if "|" not in order else None
         except ValueError:
             potential = None
-        coded = p.coded[np.all(np.isfinite(p.coded), axis=1)]
+        rows = self.rows()
+        coded = p.coded[rows]
         if len(coded) < 2:
             self.txt.setHtml(REPORT_CSS + "<p>No complete runs to evaluate yet.</p>")
             self.canvas.message("")
             return
         try:
-            ev = evaluation.evaluate(coded, terms, p.is_mixture, p.blocks[np.all(np.isfinite(p.coded), axis=1)]
-                                     if p.n_blocks > 1 else None, p.space, self.sp_delta.value(),
-                                     self.sp_sigma.value(), self.cb_alpha.currentData(), potential)
+            ev = evaluation.evaluate(coded, terms, p.is_mixture, p.blocks[rows] if p.n_blocks > 1 else None,
+                                     p.space, self.sp_delta.value(), self.sp_sigma.value(),
+                                     self.cb_alpha.currentData(), potential)
         except (ValueError, np.linalg.LinAlgError) as exc:
             self.txt.setHtml(REPORT_CSS + f"<p class='ns'>{exc}</p>")
             return
@@ -107,11 +108,22 @@ class EvalTab(QWidget):
         self.txt.setHtml(REPORT_CSS + self.html(ev, order))
         self.draw()
 
+    def rows(self):
+        """Runs used for the evaluation: complete factor values, not excluded from the analysis."""
+        p = self.project
+        rows = np.all(np.isfinite(p.coded), axis=1)
+        rows[[i for i in p.excluded if i < p.n]] = False
+        return rows
+
     def html(self, ev, order):
         p = self.project
         h = [f"<h2>Design Evaluation - {models.order_label(order)} model</h2>",
-             f"<p class='note'>{p.design_description()}</p>",
-             "<h3>Degrees of Freedom</h3><table>"]
+             f"<p class='note'>{p.design_description()}</p>"]
+        if p.excluded:
+            m = len(p.excluded)
+            h.append(f"<p class='note'>{m} run{'s' if m > 1 else ''} excluded from the analysis "
+                     f"{'are' if m > 1 else 'is'} left out.</p>")
+        h.append("<h3>Degrees of Freedom</h3><table>")
         rows = [("Number of runs", ev["n"]), ("Model coefficients (including intercept/blocks)", ev["p"]),
                 ("Residual", ev["df_resid"]), ("Lack of fit", ev["df_lof"]), ("Pure error", ev["df_pe"])]
         for lab, v in rows:
@@ -162,7 +174,10 @@ class EvalTab(QWidget):
                 ("D-efficiency (%)", fmt(m["d_eff"], 4), "relative to an ideal ±1 orthogonal design"),
                 ("A-efficiency (%)", fmt(m["a_eff"], 4), "mean coefficient variance"),
                 ("G-efficiency (%)", fmt(m.get("g_eff", np.nan), 4), "worst prediction variance in the design region"),
-                ("Mean prediction variance (I, ×σ²)", fmt(m.get("pv_mean", np.nan), 4), "I criterion - smaller is better"),
+                ("Average prediction variance (I, ×σ²)", fmt(m.get("pv_mean", np.nan), 4),
+                 "I criterion: mean over the design region - smaller is better"),
+                ("Scaled average prediction variance (n·I)", fmt(m.get("i_scaled", np.nan), 4),
+                 "n × I, for comparing designs with different numbers of runs"),
                 ("Max / min prediction variance (×σ²)", f"{fmt(m.get('pv_max', np.nan), 4)} / {fmt(m.get('pv_min', np.nan), 4)}",
                  "in the design region"),
                 ("Max / mean leverage", f"{fmt(m['lev_max'], 4)} / {fmt(m['lev_mean'], 4)}", "mean = p/n")]
@@ -252,7 +267,7 @@ class EvalTab(QWidget):
             ax.grid(False)
         else:
             ax = fig.add_subplot(111)
-            run = p.run_order[np.all(np.isfinite(p.coded), axis=1)]
+            run = p.run_order[self.rows()]
             o = np.argsort(run)
             plots._stems(ax, run[o], ev["leverage"][o], plots.BLUE)
             ax.axhline(2 * ev["p"] / ev["n"], color=plots.RED, ls="--", lw=1, label="2p/n")

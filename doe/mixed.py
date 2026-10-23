@@ -41,6 +41,15 @@ def _reml_parts(X, y, inv, n_groups, gamma):
 
 
 class MixedResult(models.FitResult):
+    # deletion diagnostics (Cook's distance, DFFITS) are not computed for the mixed model
+    has_influence = False
+
+    @property
+    def coef_df(self):
+        """Containment df per coefficient: whole-plot df for the intercept and whole-plot terms, else subplot df
+        (the same rule as the Wald F tests)."""
+        return self._coef_df
+
     def intervals(self, coded, n_obs=1, level=0.95):
         z = self.predict_t(coded)
         h = self.leverage_at(coded)            # already on the σ² scale (cov β)
@@ -92,6 +101,10 @@ def fit_reml(coded, y, terms, groups, htc, mixture=False, transform=None, space=
     df_wp = max(n_wp - n_wp_cols, 0)
     df_sp = max(n - n_wp - (p - n_wp_cols), 0)
 
+    def den_df(t):
+        den = df_wp if (models.is_intercept(t) or t in wp_terms) else df_sp
+        return den if den > 0 else max(n - p, 1)
+
     anova = []
     for t in dc.fterms:
         if models.is_intercept(t) or (mixture and not dc.use_intercept and models.degree(t) == 1):
@@ -100,9 +113,7 @@ def fit_reml(coded, y, terms, groups, htc, mixture=False, transform=None, space=
         b = beta[pos]
         C = cov[np.ix_(pos, pos)]
         F = float(b @ np.linalg.pinv(C) @ b) / len(pos)
-        den = df_wp if t in wp_terms else df_sp
-        if den <= 0:
-            den = max(n - p, 1)
+        den = den_df(t)
         anova.append(models.AnovaRow(models.term_name(t), np.nan, len(pos), float(den), F,
                                      float(stats.f.sf(F, len(pos), den))))
 
@@ -131,11 +142,12 @@ def fit_reml(coded, y, terms, groups, htc, mixture=False, transform=None, space=
                       exp_terms=dc.body, exp_idx=dc.exp_idx, col_terms=dc.col_terms, col_levels=dc.col_levels,
                       space=dc.space, se=se, vif=np.full(p, np.nan), n=n, p=p, df_resid=max(df_sp, 1),
                       sse=sse, sst=sst, mse=1.0, y=y, y_orig=y_orig, yhat=yhat, resid=cond, leverage=lev,
-                      stud_int=stud, stud_ext=stud, cooks=np.zeros(n), dffits=np.zeros(n), xtx_inv=cov,
-                      mixture=mixture and not dc.use_intercept, transform=transform, anova=anova, stats=st,
-                      rows_used=np.where(mask)[0])
+                      stud_int=stud, stud_ext=stud, cooks=np.full(n, np.nan), dffits=np.full(n, np.nan),
+                      xtx_inv=cov, mixture=mixture and not dc.use_intercept, transform=transform, anova=anova,
+                      stats=st, rows_used=np.where(mask)[0])
     res.sigma2, res.sigma2_wp, res.wp_terms = sigma2, sigma2_wp, wp_terms
     res.resid_var_for_poe = sigma2 + sigma2_wp
+    res._coef_df = np.array([float(den_df(t)) for t in dc.col_terms])
     return res
 
 

@@ -13,6 +13,12 @@ from .common import fmt, parse_float
 
 COLS = ["Response", "Prediction", "Std. Error of mean", "CI low", "CI high", "PI low", "PI high",
         "Confirmation mean", "Status"]
+ANN_TOL = 0.05              # ANN confirmation: |observed - predicted| <= 5% of the observed response range
+
+
+def has_transform(fit):
+    tr = getattr(fit, "transform", None)
+    return bool(tr) and tr.get("kind", "none") != "none"
 
 
 class PredictTab(QWidget):
@@ -64,7 +70,9 @@ class PredictTab(QWidget):
             "<b>PI</b> = prediction interval for the <i>mean of the n confirmation runs</i> you will perform. "
             "Perform n runs at this point and type the mean result in the <b>Confirmation mean</b> column: "
             "if it falls inside the PI, the model is <b>confirmed</b>. If the response is transformed, the "
-            "intervals are computed on the transformed scale and then converted back to the original scale.")
+            "intervals are computed on the transformed scale and then converted back to the original scale; the "
+            "standard error is then shown on the transformed scale. An ANN model has no intervals: its prediction "
+            "is confirmed when |confirmation mean − prediction| ≤ 5% of the observed range of the response data.")
         info.setWordWrap(True)
         info.setStyleSheet("color: #444;")
         right.addWidget(info)
@@ -165,7 +173,8 @@ class PredictTab(QWidget):
             else:
                 iv = fit.intervals(x[None, :], n_obs=n, level=level)
                 se = iv["se_mean"][0]
-                cells += [fmt(iv["pred"][0], 6), fmt(se, 4), fmt(iv["ci"][0][0], 6), fmt(iv["ci"][1][0], 6),
+                se_txt = fmt(se, 4) + (" (transformed scale)" if has_transform(fit) and np.isfinite(se) else "")
+                cells += [fmt(iv["pred"][0], 6), se_txt, fmt(iv["ci"][0][0], 6), fmt(iv["ci"][1][0], 6),
                           fmt(iv["pi"][0][0], 6), fmt(iv["pi"][1][0], 6)]
                 self._confirm.setdefault(j, "")
             for c, v in enumerate(cells):
@@ -174,6 +183,9 @@ class PredictTab(QWidget):
                 it.setTextAlignment(Qt.AlignCenter)
                 if c == 1:
                     it.setBackground(QBrush(QColor("#e6f4ea")))
+                if c == 2 and fit is not None and has_transform(fit):
+                    it.setToolTip("Standard error of the mean on the transformed scale of the response; the CI and "
+                                  "PI are converted back to the original scale.")
                 self.tbl.setItem(j, c, it)
             conf = QTableWidgetItem(self._confirm.get(j, ""))
             conf.setTextAlignment(Qt.AlignCenter)
@@ -198,11 +210,20 @@ class PredictTab(QWidget):
                 lo, hi = iv["pi"] if np.isfinite(iv["pi"][0][0]) else iv["ci"]
                 name = "PI" if np.isfinite(iv["pi"][0][0]) else "CI"
                 if not np.isfinite(lo[0]):
-                    # model without intervals (ANN): use the relative error, typically < 5 %
+                    # model without intervals (ANN): |error| within 5% of the observed response range of the data
                     pred = float(iv["pred"][0])
-                    err = abs(v - pred) / abs(pred) * 100 if pred else math.inf
-                    ok = err < 5
-                    text = f"{'✓' if ok else '✗'} Relative error {err:.2f}% ({'< 5%' if ok else '≥ 5%'})"
+                    y = self.project.model_data[:, j]
+                    y = y[np.isfinite(y)]
+                    rng = float(y.max() - y.min()) if len(y) else 0.0
+                    if rng > 0:
+                        err = abs(v - pred) / rng * 100
+                        ok = err <= ANN_TOL * 100
+                        text = (f"{'✓' if ok else '✗'} Error {fmt(abs(v - pred), 4)} = {err:.2f}% of the data "
+                                f"range ({'≤ 5%' if ok else '> 5%'})")
+                    else:                       # constant response data: fall back to the relative error
+                        err = abs(v - pred) / abs(pred) * 100 if pred else math.inf
+                        ok = err <= ANN_TOL * 100
+                        text = f"{'✓' if ok else '✗'} Relative error {err:.2f}% ({'≤ 5%' if ok else '> 5%'})"
                     color = "#d3f0dc" if ok else "#fde2e1"
                 elif lo[0] <= v <= hi[0]:
                     text, color = f"✓ Confirmed (inside {name})", "#d3f0dc"

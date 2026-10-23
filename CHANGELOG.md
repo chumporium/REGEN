@@ -2,6 +2,47 @@
 
 Versions 1 to 6 were developed under the name DOE Studio.
 
+## Unreleased
+Design and data
+- New Design: random seed option; the same seed gives the same run order and the same optimal, Latin
+  hypercube and hybrid designs. The seed is saved with the project and shown on the Summary page.
+- Excluded runs are left out of Design Evaluation and Data Normalization; Excel export and the PDF report mark
+  them in an "Excluded" column.
+- Mixture center points: the centroid of the (constrained) mixture region is added instead of the mean of the
+  existing runs.
+- Factorial to CCD augmentation states the fractional factorial core; rotatable alpha counts all factorial runs
+  of the core, replicates included.
+- Data Readiness: zero pure-error df is rated "bad"; the score footnote matches the verdicts.
+- Summary: correct number of whole plots for split-plot designs; "POE σ" column header.
+- Design Evaluation shows the scaled average prediction variance (n·I) next to I.
+- Simulation: the dialog lists all accepted functions, "." is the decimal separator, min(a, b) and max(a, b)
+  work, and noise σ is disabled for binomial and Poisson responses.
+
+Analysis
+- Fit Summary for combined mixture-process designs uses a nested sequence of models.
+- Lack of fit is judged at p = 0.05 everywhere.
+- Box-Cox uses the constant k and the standard confidence interval ln(1 + t²/ν); an interval that reaches the end
+  of the λ range is reported as such.
+- Effects plots are labelled Effect and |Effect| and show Lenth's ME and SME lines; Plackett-Burman designs show
+  main effects only.
+- "Maintain hierarchy" option for the term list and the effects plot.
+- GLM: predicted vs actual on the response scale (proportion or count), convergence and separation warnings.
+- Split-plot (REML): coefficient tests use the same denominator df as the Wald F tests; Cook's distance and DFFITS
+  are not shown because they are not defined for REML fits.
+- All Factors graph: reference level for each categoric factor.
+
+ANN and optimization
+- The noise level from replicated runs is used in the ANN diagnosis.
+- After an architecture search, the status and suggestions follow the cross-validated diagnosis; the single
+  train/test split of the final model is shown separately.
+- Learning curve: warning when the run estimate is unreliable; the message states the test used.
+- Desirability: shape exponent for each response (default 1, linear).
+- Prediction: standard error labelled with its scale when a transformation is used; ANN confirmation compares
+  the error with 5% of the response range.
+- NSGA-II with four or more objectives: a note explains that the automatic stop is disabled.
+- Search results, learning curves, NSGA results, front comparisons and desirability solutions are saved in the
+  project file.
+
 ## 7.0.0
 - The application is renamed REGEN (Response Engineering with GEnetic algorithms and Neural networks).
 - The user interface, reports and source code are in English.

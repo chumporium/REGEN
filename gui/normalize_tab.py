@@ -18,9 +18,11 @@ FORMULAS = {"mapminmax": "x' = 2(x − min)/(max − min) − 1   → range [−
 
 
 def columns(project, use_factors=True, use_responses=True):
-    """-> (column names, matrix of actual values) in run order. Categorical factors use the level index."""
+    """-> (column names, matrix of actual values) in run order. Categorical factors use the level index.
+    Runs excluded from the analysis are left out, as in modeling."""
     p = project
-    order = p.display_order()
+    excluded = set(p.excluded)
+    order = np.array([i for i in p.display_order() if i not in excluded], int)
     names, cols = [], []
     if use_factors:
         act = p.actual
@@ -68,6 +70,9 @@ class NormalizeTab(QWidget):
         note.setWordWrap(True)
         note.setStyleSheet(f"color: {theme.MUTED};")
         lay.addWidget(note)
+        self.lbl_excl = QLabel()
+        self.lbl_excl.setStyleSheet(f"color: {theme.MUTED};")
+        lay.addWidget(self.lbl_excl)
 
         split = QSplitter(Qt.Horizontal)
         lay.addWidget(split, 1)
@@ -108,6 +113,10 @@ class NormalizeTab(QWidget):
             return
         names, A, Z, off, scale, base, runs, method = self.compute()
         self.lbl_formula.setText(FORMULAS[method])
+        m = len(self.project.excluded)
+        self.lbl_excl.setText(f"{m} run{'s' if m > 1 else ''} excluded from the analysis {'are' if m > 1 else 'is'} "
+                              "left out." if m else "")
+        self.lbl_excl.setVisible(bool(m))
         t = self.tbl
         self.tbl_model.set_data(["Run"] + names, [runs] + [Z[:, c] for c in range(len(names))],
                                 lambda c, v: str(v) if c == 0 else ("" if np.isnan(v) else f"{v:.5f}"))

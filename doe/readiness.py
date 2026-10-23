@@ -8,6 +8,7 @@ Recommendation: {"kind": "complete" (complete the data) | "treatment", "text", "
 import numpy as np
 from scipy import stats
 
+from . import constraints as cons_mod
 from . import models
 
 CATS = {"data": "Data Completeness & Cleanliness", "model": "Data Structure for Modeling",
@@ -209,12 +210,18 @@ def assess(project, j, order=None, n_suggest=None):
         if not p.is_mixture and p.num_idx:
             center = center.copy()
             center[p.num_idx] = 0.0
+        elif p.is_mixture:                     # overall centroid of the (constrained) mixture region
+            lo, hi = p.coded_bounds()
+            G, h = p.constraint_system(cols=p.comp_idx)
+            center[p.comp_idx] = cons_mod.region_centroid(lo[p.comp_idx], hi[p.comp_idx], G, h, True)
+            center[p.proc_idx] = 0.0
+            center[p.cat_idx] = existing[0, p.cat_idx]
         sugg["rep"] = np.repeat(center[None], 4, axis=0)
         recs.append(_rec("complete", "Add 3–5 replicates (e.g. at the center point) to measure pure error: "
                                      "lack of fit can then be tested and the response noise is known.",
                          ("add_runs", "rep")))
     checks.append(_chk("model", "Replicates (pure error)", f"pure error df = {dfpe}",
-                       "ok" if dfpe >= 3 else ("warn" if dfpe >= 1 else "warn"),
+                       "ok" if dfpe >= 3 else ("warn" if dfpe >= 1 else "bad"),
                        "Without replicates, lack of fit cannot be tested and the noise level is unknown.", recs))
 
     fit, err = p.fit_with_error(j)

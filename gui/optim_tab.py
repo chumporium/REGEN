@@ -2,18 +2,22 @@
 import numpy as np
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QBrush, QColor
-from PySide6.QtWidgets import (QApplication, QComboBox, QGroupBox, QHBoxLayout, QHeaderView, QLabel, QMessageBox,
-                               QPushButton, QSplitter, QTableWidget, QTableWidgetItem, QVBoxLayout,
+from PySide6.QtWidgets import (QApplication, QComboBox, QDoubleSpinBox, QGroupBox, QHBoxLayout, QHeaderView, QLabel,
+                               QMessageBox, QPushButton, QSplitter, QTableWidget, QTableWidgetItem, QVBoxLayout,
                                QWidget)
 
 from doe import models
-from doe.optimize import GOALS, desirability
+from doe.optimize import GOALS, SHAPE_RANGE, criterion_desirability
 
 from .copying import install_table_copy
 from .common import MplCanvas, fmt, model_source_combo, parse_float
 
 IMPORTANCE = ["+", "++", "+++", "++++", "+++++"]
-COLS = ["Name", "Goal", "Lower Limit", "Upper Limit", "Target", "Importance", "Model"]
+COLS = ["Name", "Goal", "Lower Limit", "Upper Limit", "Target", "Shape", "Importance", "Model"]
+C_SHAPE, C_IMP, C_MODEL = 5, 6, 7
+SHAPE_TIP = ("Shape of the desirability function (weight, Derringer and Suich 1980), used on both sides of the "
+             "goal.\n1 = linear. Above 1: the response must come close to the goal before the desirability rises.\n"
+             "Below 1: the desirability rises quickly away from the limit.")
 
 
 class OptimTab(QWidget):
@@ -30,6 +34,7 @@ class OptimTab(QWidget):
         gl = QVBoxLayout(g)
         self.tbl = QTableWidget(0, len(COLS))
         self.tbl.setHorizontalHeaderLabels(COLS)
+        self.tbl.horizontalHeaderItem(C_SHAPE).setToolTip(SHAPE_TIP)
         self.tbl.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         self.tbl.verticalHeader().setVisible(False)
         gl.addWidget(self.tbl)
@@ -71,7 +76,8 @@ class OptimTab(QWidget):
     def set_project(self, project):
         self.project = project
         self.solutions = list(project.solutions)
-        self.criteria_used = list(project.criteria_used)
+        self.criteria_used = project.criteria_models(project.criteria_used)     # restored from a file: no models
+        project.criteria_used = self.criteria_used
         self.tbl_sol.clear()
         self.tbl_sol.setRowCount(0)
         self.tbl_sol.setColumnCount(0)
@@ -113,12 +119,10 @@ class OptimTab(QWidget):
                 self.tbl.setItem(i, 1, self._item("In range", False))
                 self.tbl.setItem(i, 2, self._item(fmt(c.get("low", f.low), 8)))
                 self.tbl.setItem(i, 3, self._item(fmt(c.get("high", f.high), 8)))
-            self.tbl.setItem(i, 4, self._item("", False))
-            self.tbl.setItem(i, 5, self._item("", False))
-            self.tbl.setItem(i, 6, self._item("", False))
+            for col in (4, C_SHAPE, C_IMP, C_MODEL):
+                self.tbl.removeCellWidget(i, col)
+                self.tbl.setItem(i, col, self._item("", False))
             self.tbl.removeCellWidget(i, 1)
-            self.tbl.removeCellWidget(i, 5)
-            self.tbl.removeCellWidget(i, 6)
         for n, (kind, j) in enumerate(self._rows):
             row = p.k + n
             y = p.data[:, j]
@@ -145,15 +149,22 @@ class OptimTab(QWidget):
             self.tbl.setItem(row, 2, self._item(fmt(c.get("low", ymin), 8)))
             self.tbl.setItem(row, 3, self._item(fmt(c.get("high", ymax), 8)))
             self.tbl.setItem(row, 4, self._item(fmt(c.get("target", (ymin + ymax) / 2), 8)))
+            sp = QDoubleSpinBox()
+            sp.setRange(*SHAPE_RANGE)
+            sp.setDecimals(2)
+            sp.setSingleStep(0.1)
+            sp.setValue(float(c.get("shape", 1.0)))
+            sp.setToolTip(SHAPE_TIP)
+            self.tbl.setCellWidget(row, C_SHAPE, sp)
             cbi = QComboBox()
             cbi.addItems(IMPORTANCE)
             cbi.setCurrentIndex(int(c.get("importance", 3)) - 1)
-            self.tbl.setCellWidget(row, 5, cbi)
+            self.tbl.setCellWidget(row, C_IMP, cbi)
             if kind == "resp":
-                self.tbl.setCellWidget(row, 6, model_source_combo(p, j, self.model_changed.emit))
+                self.tbl.setCellWidget(row, C_MODEL, model_source_combo(p, j, self.model_changed.emit))
             else:
-                self.tbl.removeCellWidget(row, 6)
-                self.tbl.setItem(row, 6, self._item("follows response", False))
+                self.tbl.removeCellWidget(row, C_MODEL)
+                self.tbl.setItem(row, C_MODEL, self._item("follows response", False))
         self.tbl.resizeRowsToContents()
 
     def _num(self, row, col):
@@ -173,10 +184,12 @@ class OptimTab(QWidget):
                 crit[j if kind == "resp" else f"poe{j}"] = {"goal": self.tbl.cellWidget(row, 1).currentData(),
                            "low": self._num(row, 2), "high": self._num(row, 3),
                            "target": self._num(row, 4),
-                           "importance": self.tbl.cellWidget(row, 5).currentIndex() + 1}
+                           "shape": float(self.tbl.cellWidget(row, C_SHAPE).value()),
+                           "importance": self.tbl.cellWidget(row, C_IMP).currentIndex() + 1}
         except (ValueError, AttributeError):
             return "Some limits are not numbers."
-        if crit != p.opt_criteria:
+        old = {k: ({"shape": 1.0, **v} if "goal" in v else v) for k, v in p.opt_criteria.items()}  # older files
+        if crit != old:
             p.opt_criteria = crit
             p.dirty = True
         return None
@@ -207,7 +220,7 @@ class OptimTab(QWidget):
                 continue
             if kind == "poe":
                 criteria.append({**c, "fit": models.PoeModel(fit, p.sd_coded()), "index": j,
-                                 "label": f"POE {r.name}"})
+                                 "label": f"POE {r.name}", "poe": True})
                 continue
             if c["low"] >= c["high"]:
                 QMessageBox.warning(self, "Optimization", f"Limits for response {r.name}: lower must be < upper.")
@@ -234,6 +247,7 @@ class OptimTab(QWidget):
         self.criteria_used = criteria
         self.solutions = sols[:20]
         p.solutions, p.criteria_used = self.solutions, criteria
+        p.dirty = True
         self.show_solutions()
 
     def show_solutions(self):
@@ -272,7 +286,7 @@ class OptimTab(QWidget):
         names, ds = [], []
         for c in self.criteria_used:
             y = c["fit"].predict(x[None, :])
-            ds.append(float(desirability(y, c["goal"], c["low"], c["high"], c.get("target"))[0]))
+            ds.append(float(criterion_desirability(y, c)[0]))
             names.append(c.get("label", p.responses[c["index"]].name))
         names.append("Combined")
         ds.append(D)

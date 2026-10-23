@@ -1,5 +1,5 @@
-"""Artificial Neural Network (MLP, 1–5 hidden layers, one or more outputs) trained with Levenberg-Marquardt /
-Bayesian Regularization.
+"""Artificial Neural Network (MLP with any number of hidden layers and neurons, one or more outputs) trained with
+Levenberg-Marquardt / Bayesian Regularization (or Adam for very large networks).
 
 Follows common practice (MATLAB `feedforwardnet` + `trainlm` / `trainbr`):
 - inputs & outputs are normalized (default mapminmax to [-1, 1]; also [0, 1], z-score, or none); normalization
@@ -903,6 +903,9 @@ def architecture_search(coded, y, space, max_layers=3, max_neurons=10, activatio
     Final choice: the simplest architecture with status "good" whose error is no worse than the best + 1 standard
     error.
 
+    noise: measurement uncertainty (pure-error SD from replicated runs, in response units) of each response, or None
+    when unknown. With a noise level, a training error below half the noise counts as overfitting.
+    weight_ratio: maximum number of weights as a multiple of the training rows; None (default) = no limit.
     n_jobs > 1: all training runs (architecture x fold x restart) are spread over many CPU cores. When cores are
     left over, the next few neuron counts are evaluated together; the order of early-stopping decisions stays the
     same, so the results are identical to the single-core version.
@@ -926,11 +929,9 @@ def architecture_search(coded, y, space, max_layers=3, max_neurons=10, activatio
     n_train = min(len(s[0]) for s in splits)
     n_in = encode(Xc[:1], space)[0].shape[1]
     n_out = Y.shape[1]
-    # weight_ratio: None = automatic (2x / 1x training rows), inf or <= 0 = no weight limit
-    if weight_ratio is None:
-        ratio = 2.0 if algorithm == "trainbr" else 1.0
-    else:
-        ratio = float(weight_ratio) if weight_ratio and weight_ratio > 0 else np.inf
+    # weight_ratio: maximum weights = ratio x training rows; None, inf or <= 0 = no weight limit (network size is then
+    # limited only by early stopping, as in the GUI default)
+    ratio = float(weight_ratio) if weight_ratio and weight_ratio > 0 else np.inf
     limit = max(ratio * n_train, n_weights_for(n_in, [1], n_out))
     max_neurons = int(max_neurons) if max_neurons else None
     max_layers = int(max_layers) if max_layers else None
@@ -1064,13 +1065,15 @@ def architecture_search(coded, y, space, max_layers=3, max_neurons=10, activatio
 
 # ------------------------------------------------------------------ learning curve
 LC_FRACTIONS = (0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0)
+LC_MAX_FAIL = 6             # learning curve: fixed early-stopping patience (the GUI network settings do not apply)
+LC_C_GRID = (0.2, 2.5)      # range of the power-law exponent c searched in _power_law
 
 
 def _lc_job(Xc, Yc, space, layers, tr, va, te, opts, cancel=None):
     """One learning-curve point: train on tr (+ va for early stopping), evaluate on te."""
     m = train(Xc, Yc, space, list(layers), opts["activation"], seed=opts["seed"], restarts=opts["restarts"],
-              max_epochs=opts["max_epochs"], max_fail=6, fixed_split=(tr, va, te), algorithm=opts["algorithm"],
-              norm=opts["norm"], tol=1e-5, early_stop=len(va) > 0, cancel=cancel)
+              max_epochs=opts["max_epochs"], max_fail=LC_MAX_FAIL, fixed_split=(tr, va, te),
+              algorithm=opts["algorithm"], norm=opts["norm"], tol=1e-5, early_stop=len(va) > 0, cancel=cancel)
     P = m.predict_all(Xc)
     var = opts["var"]
     fit = np.concatenate([tr, va]).astype(int)
@@ -1086,7 +1089,7 @@ def _power_law(n, e):
     if len(n) < 3:
         return None
     best = None
-    for c in np.linspace(0.2, 2.5, 47):
+    for c in np.linspace(LC_C_GRID[0], LC_C_GRID[1], 47):
         Z = np.column_stack([np.ones(len(n)), n ** -c])
         coef, *_ = np.linalg.lstsq(Z, e, rcond=None)
         a, b = coef
@@ -1187,7 +1190,8 @@ def learning_curve(coded, y, space, layers, activation="tansig", algorithm="trai
     out = {"sizes": sizes.tolist(), "ann": a_m.tolist(), "ann_lo": a_lo.tolist(), "ann_hi": a_hi.tolist(),
            "ann_train": t_m.tolist(), "rsm": r_m.tolist(), "rsm_lo": r_lo.tolist(), "rsm_hi": r_hi.tolist(),
            "N": N, "n_test": n_te, "repeats": repeats,
-           "layers": list(layers), "fit": fit, "tol_r2": tol_r2, "test_frac": test_frac}
+           "layers": list(layers), "fit": fit, "tol_r2": tol_r2, "test_frac": test_frac, "n_full": n_full,
+           "restarts": int(restarts), "max_epochs": int(max_epochs), "max_fail": LC_MAX_FAIL}
     status = "?"
     if fit is not None:
         # estimate uncertainty: bootstrap across repeats (curve median recomputed from resampled repeats)
@@ -1205,12 +1209,34 @@ def learning_curve(coded, y, space, layers, activation="tansig", algorithm="trai
         out["n_star_fit"] = n_med
         out["total_needed"] = int(np.ceil(n_med / frac_train))
         out["total_range"] = (int(np.ceil(q1 / frac_train)), int(np.ceil(q3 / frac_train)))
+        out["n_star_q"] = (float(q1), float(q3))
+        # n_full training rows correspond to all N runs (the rest are test runs), so n* > 5 n_full means that more
+        # than 5N runs in total would be needed
         status = "enough" if n_med <= n_full else ("far" if n_med > 5 * n_full else "more")
     if N < 25:
         status = "few"                      # too few for a reliable curve
     last = a_m[np.isfinite(a_m)]
     out["slope"] = float((last[-2] - last[-1]) / max(last[-2], 1e-12)) if len(last) >= 2 else np.nan
     out["status"] = status
+    return out
+
+
+def learning_warnings(lc):
+    """Reasons why the run estimate of a learning curve is unreliable (empty list = no warning). The estimate itself
+    is not changed; it should then only be read as an indication of whether more runs help."""
+    fit = lc.get("fit")
+    if fit is None or lc.get("n_star_fit") is None:
+        return []
+    a, _b, c = fit[:3]
+    out = []
+    if c >= LC_C_GRID[1] - 1e-9 or c <= LC_C_GRID[0] + 1e-9:
+        out.append(f"the fitted exponent c = {c:.2f} lies at the edge of the range searched "
+                   f"({LC_C_GRID[0]:g} to {LC_C_GRID[1]:g})")
+    if a <= 0:
+        out.append("the fitted error limit a is 0 (the curve predicts a perfect fit with unlimited data)")
+    q1, q3 = lc.get("n_star_q") or lc.get("total_range") or (np.nan, np.nan)
+    if np.isfinite(q1) and np.isfinite(q3) and q1 > 0 and q3 / q1 > 3:
+        out.append(f"the interquartile range of the estimate is very wide (upper/lower = {q3 / q1:.1f})")
     return out
 
 

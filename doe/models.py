@@ -135,7 +135,9 @@ def combined_terms(comp_idx, proc_idx, k, order):
     return out
 
 
-COMBINED_ORDERS = ["linear|mean", "linear|linear", "quadratic|linear", "linear|2fi", "quadratic|2fi",
+# ordered by size; each order contains all earlier orders it is compared with in the Fit Summary
+# (see nested_reference), e.g. Quadratic x 2FI contains Quadratic x Linear and Linear x 2FI
+COMBINED_ORDERS = ["linear|mean", "linear|linear", "linear|2fi", "quadratic|linear", "quadratic|2fi",
                    "quadratic|quadratic", "special_cubic|linear", "special_cubic|2fi"]
 
 
@@ -386,6 +388,8 @@ class FitResult:
     stats: dict = field(default_factory=dict)
     rows_used: np.ndarray = None
 
+    has_influence = True    # Cook's distance and DFFITS are available (class attribute, not a field)
+
     @property
     def coef(self):
         """Term column coefficients (without block effects)."""
@@ -433,6 +437,23 @@ class FitResult:
         if self.df_resid <= 0:
             return np.nan
         return stats.t.ppf(0.5 + level / 2, self.df_resid)
+
+    @property
+    def coef_df(self):
+        """Degrees of freedom of the t test of each term coefficient."""
+        return np.full(len(self.term_idx), float(self.df_resid))
+
+    def coef_tests(self, level=0.95):
+        """t (or z) value, two-sided p-value, critical value for the CI, and df of each term coefficient."""
+        b, se, df = self.coef, self.coef_se, self.coef_df
+        with np.errstate(divide="ignore", invalid="ignore"):
+            t = np.where(se > 0, b / se, np.nan)
+        ok = df > 0
+        p = np.full(len(b), np.nan)
+        crit = np.full(len(b), np.nan)
+        p[ok] = 2 * stats.t.sf(np.abs(t[ok]), df[ok])
+        crit[ok] = stats.t.ppf(0.5 + level / 2, df[ok])
+        return {"t": t, "p": p, "crit": crit, "df": df}
 
     def _back(self, lo, hi):
         a = inverse_transform(lo, self.transform)
@@ -709,28 +730,62 @@ def fit_model(coded, y, terms, mixture=False, blocks=None, transform=None, space
 
 
 # ------------------------------------------------------------------ model selection
-def sequential_summary(order_fits):
-    """order_fits: list of (order, FitResult) in order starting from 'mean'. Returns (rows, suggested)."""
-    rows, prev = [], None
+def _term_set(fit):
+    """Terms requested for a fit (kept + aliased), without the intercept."""
+    return frozenset(t for t in list(fit.terms) + list(fit.aliased) if not is_intercept(t))
+
+
+def nested_sequence(order_fits):
+    """Rows for a sequential (Fit Summary) table, starting from 'mean'.
+
+    An order with the same terms as an earlier order is dropped (for example 2FI = Linear with one process factor).
+    Each row is compared with its reference: the largest earlier model whose terms are a subset of its own
+    ('mean' is contained in every model). Returns a list of dicts: order, fit, ref (row index or None), aliased.
+    """
+    rows, sets = [], []
     for order, fit in order_fits:
-        row = {"order": order, "fit": fit, "aliased": bool(fit.aliased), "seq_p": np.nan, "lof_p": np.nan}
-        if prev is not None and fit.df_resid > 0:
+        s = _term_set(fit)
+        if s in sets:
+            continue
+        ref = None
+        for n, prev in enumerate(sets):
+            if prev < s and (ref is None or rows[n]["fit"].p >= rows[ref]["fit"].p):
+                ref = n
+        rows.append({"order": order, "fit": fit, "ref": ref, "aliased": bool(fit.aliased),
+                     "seq_p": np.nan, "lof_p": np.nan})
+        sets.append(s)
+    return rows, sets
+
+
+def suggest_order(rows, sets, alpha=0.05):
+    """Highest non-aliased model with a significant sequential test that contains the previous suggestion."""
+    suggested, cur = "mean", frozenset()
+    for r, s in zip(rows[1:], sets[1:]):
+        if r["aliased"] or np.isnan(r["seq_p"]) or r["seq_p"] >= alpha or not cur <= s:
+            continue
+        suggested, cur = r["order"], s
+    return suggested
+
+
+def sequential_summary(order_fits):
+    """order_fits: list of (order, FitResult) in order starting from 'mean'. Returns (rows, suggested).
+
+    Sequential F test of each model against its nested reference model (see nested_sequence).
+    """
+    rows, sets = nested_sequence(order_fits)
+    for row in rows:
+        fit = row["fit"]
+        if row["ref"] is not None and fit.df_resid > 0:
+            prev = rows[row["ref"]]["fit"]
             df_add = fit.p - prev.p
             if df_add > 0:
                 f = ((prev.sse - fit.sse) / df_add) / fit.mse if fit.mse > 0 else np.inf
                 row["seq_p"] = stats.f.sf(f, df_add, fit.df_resid) if np.isfinite(f) else 0.0
+        row["ref_order"] = rows[row["ref"]]["order"] if row["ref"] is not None else None
         for a in fit.anova:
             if a.source == "Lack of Fit":
                 row["lof_p"] = a.p
-        rows.append(row)
-        prev = fit
-    suggested = "mean"
-    for r in rows[1:]:
-        if r["aliased"]:
-            break
-        if not np.isnan(r["seq_p"]) and r["seq_p"] < 0.05:
-            suggested = r["order"]
-    return rows, suggested
+    return rows, suggest_order(rows, sets)
 
 
 def backward_elimination(fit_fn, terms, k, alpha_out=0.10, keep_hierarchy=True, mixture=False):
@@ -758,9 +813,13 @@ def backward_elimination(fit_fn, terms, k, alpha_out=0.10, keep_hierarchy=True, 
         terms.remove(candidates[0][1])
 
 
-def box_cox(coded, y, terms, mixture=False, blocks=None, lambdas=None, space=None):
-    """Box-Cox plot: ln(residual SS) versus λ. Requires all y > 0."""
-    y = np.asarray(y, float)
+def box_cox(coded, y, terms, mixture=False, blocks=None, lambdas=None, space=None, shift=0.0):
+    """Box-Cox plot: ln(residual SS) of the scaled power transform of y + k versus λ. Requires all y + k > 0.
+
+    95% CI (Box and Cox 1964): all λ with ln SS(λ) <= ln SS(λ̂) + ln(1 + t²(α/2, ν)/ν), ν = residual df.
+    'edge' is (CI reaches the lowest λ of the grid, CI reaches the highest λ).
+    """
+    y = np.asarray(y, float) + float(shift or 0.0)
     yy = y[~np.isnan(y)]
     if len(yy) < 3 or np.any(yy <= 0):
         return None
@@ -782,16 +841,22 @@ def box_cox(coded, y, terms, mixture=False, blocks=None, lambdas=None, space=Non
     lnss = np.array(lnss)
     i = int(np.argmin(lnss))
     res = {"lambdas": lambdas, "lnss": lnss, "best": float(lambdas[i]), "min": float(lnss[i]),
-           "ci": (np.nan, np.nan), "threshold": np.nan}
+           "ci": (np.nan, np.nan), "threshold": np.nan, "shift": float(shift or 0.0),
+           "best_at_edge": i in (0, len(lambdas) - 1), "edge": (i == 0, i == len(lambdas) - 1)}
     if df and df > 0:
-        thr = lnss[i] + stats.t.ppf(0.975, df) ** 2 / df
-        inside = lambdas[lnss <= thr]
+        t = stats.t.ppf(0.975, df)
+        thr = lnss[i] + np.log1p(t ** 2 / df)
+        ok = lnss <= thr
+        inside = lambdas[ok]
         res["threshold"] = float(thr)
         res["ci"] = (float(inside.min()), float(inside.max()))
+        res["edge"] = (bool(ok[0]), bool(ok[-1]))
     return res
 
 
 def recommend_transform(bc):
+    """Transform suggested by the Box-Cox CI. None when Box-Cox is not available, or when no standard λ lies in the
+    CI and the minimum lies at the edge of the λ grid (the CI is then open and no reliable λ can be given)."""
     if bc is None:
         return None
     lo, hi = bc["ci"]
@@ -800,6 +865,8 @@ def recommend_transform(bc):
     for lam, kind in ((0.5, "sqrt"), (0.0, "ln"), (-1.0, "inverse")):
         if not np.isnan(lo) and lo <= lam <= hi:
             return {"kind": kind}
+    if bc.get("best_at_edge"):
+        return None
     return {"kind": "power", "lam": round(bc["best"], 2)}
 
 

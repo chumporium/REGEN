@@ -11,6 +11,8 @@ from .optimize import optimize as run_optimize
 
 FILE_VERSION = 3
 
+RESULT_MAX_CHARS = 5_000_000     # a result larger than this (as JSON text) is not saved in the project file
+
 # point-type labels written by older versions (Indonesian) -> current labels
 LEGACY_POINT_TYPES = {"Faktorial": "Factorial", "Pusat": "Center", "Aksial": "Axial", "Historis": "Historical",
                       "Tepi": "Edge", "Replikasi": "Replicate", "Konfirmasi": "Confirmation", "Saran": "Suggested",
@@ -65,13 +67,14 @@ class Project:
     dirty: bool = False
     ann: dict = field(default_factory=dict, repr=False)             # response idx -> AnnModel
     model_source: dict = field(default_factory=dict)                 # response idx -> "rsm" | "ann"
-    nsga_result: dict = None                                         # last NSGA-II result (not saved)
-    nsga_compare: dict = None                                        # ANN vs RSM front comparison (not saved)
-    learning: dict = None                                            # ANN learning curve per response (not saved)
+    nsga_result: dict = None                                         # last NSGA-II result
+    nsga_compare: dict = None                                        # ANN vs RSM front comparison
+    learning: dict = None                                            # ANN learning curve per response
+    ann_search: dict = None                                          # ANN architecture search per response
     excluded: list = field(default_factory=list)                     # indices of runs excluded from the analysis
     notes: str = ""                                                  # free-form project notes
-    solutions: list = field(default_factory=list, repr=False)       # last optimization results (not saved)
-    criteria_used: list = field(default_factory=list, repr=False)
+    solutions: list = field(default_factory=list, repr=False)       # last desirability optimization results
+    criteria_used: list = field(default_factory=list, repr=False)   # their criteria (with "fit" = model)
 
     def __post_init__(self):
         if self.blocks is None:
@@ -460,6 +463,18 @@ class Project:
         self.model_specs = {(i if i < j else i - 1): v for i, v in self.model_specs.items() if i != j}
         self.opt_criteria = {(i if isinstance(i, str) or i < j else i - 1): v
                              for i, v in self.opt_criteria.items() if i != j}
+        if isinstance(self.learning, dict):
+            self.learning = {(i if i < j else i - 1): v for i, v in self.learning.items() if i != j}
+        if isinstance(self.ann_search, dict):
+            srch, done = {}, set()
+            for i, res in self.ann_search.items():
+                if j in res.get("resp", [i]):
+                    continue
+                if id(res) not in done:                    # a combined search is shared by several responses
+                    res["resp"] = [(r if r < j else r - 1) for r in res.get("resp", [])]
+                    done.add(id(res))
+                srch[i if i < j else i - 1] = res
+            self.ann_search = srch
         self.dirty = True
 
     def set_factor_value(self, idx, i, text):
@@ -562,8 +577,18 @@ class Project:
         label = ""
         if kind == "center":
             if self.is_mixture:
-                new = np.repeat(self.coded.mean(axis=0, keepdims=True), count, axis=0)
-                types = ["Centroid"] * count
+                comp, cats = self.comp_idx, self.cat_idx
+                lo, hi = self.coded_bounds()
+                G, h = self.constraint_system(cols=comp)
+                z = np.zeros(self.k)
+                z[comp] = cons_mod.region_centroid(lo[comp], hi[comp], G, h, True)
+                rows = []
+                for combo in itertools.product(*[range(len(self.factors[i].levels)) for i in cats]):
+                    r = z.copy()
+                    r[cats] = combo
+                    rows += [r] * count
+                new = np.array(rows)
+                types = ["Centroid"] * len(new)
             else:
                 new = per_combo(np.zeros((count, len(num))))
                 types = ["Center"] * len(new)
@@ -574,7 +599,7 @@ class Project:
             label = f"replicate x{count}"
         elif kind == "ccd":
             fact_pts = np.array([t == "Factorial" for t in self.point_types])
-            n_f = len(np.unique(np.round(self.coded[fact_pts][:, num], 6), axis=0))
+            n_f = int(fact_pts.sum()) // len(combos)  # factorial runs of the core, replicates included
             alpha = n_f ** 0.25 if alpha_type == "rotatable" else 1.0
             base = np.vstack([designs.axial_points(len(num), alpha), np.zeros((count, len(num)))])
             new = per_combo(base)
@@ -946,8 +971,10 @@ class Project:
     def box_cox(self, j):
         if self.analysis_kind(j) != "ols":
             return None
+        tr = self.model_spec(j).get("transform") or {}
+        shift = float(tr.get("shift", 0) or 0) if tr.get("kind", "none") != "none" else 0.0
         return models.box_cox(self.coded, self.model_data[:, j], self.model_terms(j), mixture=self.is_mixture,
-                              blocks=self.blocks if self.n_blocks > 1 else None, space=self.space)
+                              blocks=self.blocks if self.n_blocks > 1 else None, space=self.space, shift=shift)
 
     @property
     def is_two_level_factorial(self):
@@ -955,7 +982,8 @@ class Project:
             and not self.cat_idx and not self.is_split_plot
 
     def effects(self, j):
-        return models.factorial_effects(self.coded, self.model_data[:, j], self.space)
+        return models.factorial_effects(self.coded, self.model_data[:, j], self.space,
+                                        max_order=1 if self.design_type == "plackett_burman" else None)
 
     # ---------- optimization ----------
     def optimize(self, criteria, factor_bounds):
@@ -983,7 +1011,57 @@ class Project:
         sols.sort(key=lambda s: -s[0])
         return sols
 
+    def criteria_models(self, criteria):
+        """Criteria restored from a file have no model ("fit"): attach the current model of each response (POE
+        criteria: its POE model). Criteria whose model is not available are left out."""
+        out = []
+        for c in criteria:
+            if c.get("fit") is not None:
+                out.append(c)
+                continue
+            fit = self.model(c["index"]) if c.get("index") is not None and c["index"] < len(self.responses) else None
+            if fit is None:
+                continue
+            if c.get("poe"):
+                fit = models.PoeModel(fit, self.sd_coded())
+            out.append({**c, "fit": fit})
+        return out
+
     # ---------- save / open ----------
+    def results_dict(self):
+        """Analysis results that are kept with the project (JSON-serializable). Each result that cannot be
+        converted or is very large is left out; the project still opens without it."""
+        out = {}
+        items = {"ann_search": {j: {k: v for k, v in res.items() if k not in ("rows", "splits")}
+                                for j, res in (self.ann_search or {}).items()},
+                 "learning": self.learning or {},
+                 "nsga_result": self.nsga_result,
+                 "nsga_compare": self.nsga_compare,
+                 "solutions": [(float(D), np.asarray(x, float)) for D, x in self.solutions],
+                 "criteria_used": [{k: v for k, v in c.items() if k != "fit"} for c in self.criteria_used]}
+        for key, val in items.items():
+            if not val:
+                continue
+            try:
+                packed = pack_result(val)
+                if len(json.dumps(packed)) <= RESULT_MAX_CHARS:
+                    out[key] = packed
+            except (TypeError, ValueError):
+                pass
+        return out
+
+    def restore_results(self, d):
+        for key in ("ann_search", "learning", "nsga_result", "nsga_compare", "solutions", "criteria_used"):
+            if key not in d:
+                continue
+            try:
+                val = unpack_result(d[key])
+            except (TypeError, ValueError, KeyError):
+                continue
+            if key == "solutions":
+                val = [(float(D), np.asarray(x, float)) for D, x in val]
+            setattr(self, key, val)
+
     def to_dict(self):
         def term_list(ts):
             return None if ts is None else [list(t) for t in ts]
@@ -1008,6 +1086,7 @@ class Project:
             "model_source": {str(k): v for k, v in self.model_source.items()},
             "excluded": list(self.excluded),
             "notes": self.notes,
+            "results": self.results_dict(),
         }
 
     @classmethod
@@ -1059,8 +1138,50 @@ class Project:
         p.model_source = {int(k): v for k, v in d.get("model_source", {}).items()}
         p.excluded = [int(i) for i in d.get("excluded", [])]
         p.notes = d.get("notes", "") or ""
+        if isinstance(d.get("results"), dict):         # older files have no saved results
+            p.restore_results(d["results"])
         p.path = path
         return p
+
+
+def pack_result(v):
+    """Result object (dicts, lists, tuples, numpy arrays and scalars) -> JSON-serializable form. Arrays, tuples and
+    dicts with non-string keys are tagged so that unpack_result restores them exactly."""
+    if isinstance(v, np.ndarray):
+        if v.dtype.kind not in "biuf":
+            raise TypeError("unsupported array type")
+        return {"__array__": v.ravel().tolist(), "shape": list(v.shape), "dtype": v.dtype.str}
+    if isinstance(v, dict):
+        if all(isinstance(k, str) and not k.startswith("__") for k in v):
+            return {k: pack_result(x) for k, x in v.items()}
+        return {"__items__": [[pack_result(k), pack_result(x)] for k, x in v.items()]}
+    if isinstance(v, tuple):
+        return {"__tuple__": [pack_result(x) for x in v]}
+    if isinstance(v, list):
+        return [pack_result(x) for x in v]
+    if isinstance(v, np.generic):
+        return v.item()
+    if v is None or isinstance(v, (bool, int, float, str)):
+        return v
+    raise TypeError(f"cannot save {type(v).__name__}")
+
+
+def unpack_result(v):
+    if isinstance(v, list):
+        return [unpack_result(x) for x in v]
+    if not isinstance(v, dict):
+        return v
+    if "__array__" in v:
+        return np.array(v["__array__"], dtype=np.dtype(v["dtype"])).reshape(v["shape"])
+    if "__tuple__" in v:
+        return tuple(unpack_result(x) for x in v["__tuple__"])
+    if "__items__" in v:
+        return {_key(unpack_result(k)): unpack_result(x) for k, x in v["__items__"]}
+    return {k: unpack_result(x) for k, x in v.items()}
+
+
+def _key(k):
+    return tuple(_key(x) for x in k) if isinstance(k, list) else k
 
 
 # ------------------------------------------------------------------ sample data

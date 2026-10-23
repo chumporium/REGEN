@@ -23,6 +23,8 @@ KINDS = [("front", "Pareto front (2D / 3D / matrix)"), ("front2d", "Pareto 2D (c
          ("convergence", "Convergence (hypervolume)")]
 CMP_KINDS = [("cmp_front", "ANN vs RSM: 2D front"), ("cmp_cross", "ANN vs RSM: cross-prediction"),
              ("cmp_factors", "ANN vs RSM: factors")]
+STOP_OFF_NOTE = ("Automatic stop is disabled for NSGA-II with four or more objectives; use NSGA-III or a fixed number "
+                 "of generations.")
 
 
 def objective_label(project, o):
@@ -662,6 +664,11 @@ class NsgaTab(QWidget):
         prm2.addWidget(self.sp_win)
         prm2.addStretch()
         gl.addLayout(prm2)
+        self.lbl_stop_off = QLabel(STOP_OFF_NOTE)
+        self.lbl_stop_off.setWordWrap(True)
+        self.lbl_stop_off.setStyleSheet("color: #b45309;")
+        self.lbl_stop_off.setVisible(False)
+        gl.addWidget(self.lbl_stop_off)
 
         btns = QHBoxLayout()
         self.btn_run = QPushButton("Run Optimization")
@@ -763,6 +770,8 @@ class NsgaTab(QWidget):
             cb.currentIndexChanged.connect(self.draw)
         self.cb_view.currentIndexChanged.connect(self._on_view)
         self.tbl_sol.itemSelectionChanged.connect(self.draw)
+        self.cb_alg.currentIndexChanged.connect(lambda *_: self._update_stop_note())
+        self.chk_stop.toggled.connect(lambda *_: self._update_stop_note())
 
     # ---------------------------------------------------------------
     def set_project(self, project):
@@ -819,11 +828,21 @@ class NsgaTab(QWidget):
                 cb.addItem(label, key)
             prev = p.opt_criteria.get(j, {}).get("goal", "none") if not poe else "none"
             cb.setCurrentIndex(max(cb.findData(prev if prev in ("maximize", "minimize", "target") else "none"), 0))
+            cb.currentIndexChanged.connect(lambda *_: self._update_stop_note())
             self.tbl.setCellWidget(n, 2, cb)
             tgt = p.opt_criteria.get(j, {}).get("target", "")
             for c, v in ((3, "" if poe or tgt == "" else fmt(tgt, 8)), (4, ""), (5, ""), (6, "1")):
                 self.tbl.setItem(n, c, QTableWidgetItem(v))
         self._refresh_sources()
+        self._update_stop_note()
+
+    def _update_stop_note(self):
+        """Show that automatic stop will not be used (NSGA-II with 4 or more objectives, see project.run_nsga)."""
+        n_obj = sum(1 for n in range(self.tbl.rowCount()) if self.tbl.cellWidget(n, 2) is not None
+                    and self.tbl.cellWidget(n, 2).currentData() != "none")
+        alg = self.cb_alg.currentData()
+        alg = alg if alg in ("nsga2", "nsga3") else ("nsga3" if n_obj >= 3 else "nsga2")
+        self.lbl_stop_off.setVisible(self.chk_stop.isChecked() and alg == "nsga2" and n_obj >= 4)
 
     def _objectives(self):
         objs = []
@@ -916,6 +935,7 @@ class NsgaTab(QWidget):
 
         def done(res):
             self.project.nsga_result = res
+            self.project.dirty = True
             self.result = res
             self.adequacy = None
             self.cb_view.setCurrentIndex(0)
@@ -945,6 +965,7 @@ class NsgaTab(QWidget):
 
         def done(cmp):
             p.nsga_compare = cmp
+            p.dirty = True
             self.compare = cmp
             self._fill_views()
             self.txt_cmp.setHtml(REPORT_CSS + compare_html(p, cmp))
@@ -1086,7 +1107,8 @@ class NsgaTab(QWidget):
         alg = ALG_NAME.get(res.get("algorithm"), "NSGA-II")
         stop = f", automatic stop at generation {res['stop_gen']}" if res.get("stop_gen") and \
             "converged" in (res.get("stop_reason") or "") else f", {res.get('gens_run', '')} generations"
-        self.lbl_best.setText(f"{alg}: {len(X)} Pareto solutions{stop}. Best compromise (TOPSIS): {desc} → {resp}")
+        self.lbl_best.setText(f"{alg}: {len(X)} Pareto solutions{stop}. Best compromise (TOPSIS): {desc} → {resp}"
+                              + (f"\n{STOP_OFF_NOTE}" if res.get("stop_off") else ""))
         self.show_convergence()
         if self.compare:
             self.txt_cmp.setHtml(REPORT_CSS + compare_html(p, self.compare))

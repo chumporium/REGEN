@@ -137,6 +137,11 @@ def vertices(lo, hi, G, h, mixture, tol=1e-7):
     return np.array(found), actives
 
 
+def region_centroid(lo, hi, G, h, mixture):
+    """Overall centroid of the design region = mean of its vertices ((1/q, ..., 1/q) for a full simplex)."""
+    return vertices(lo, hi, G, h, mixture)[0].mean(axis=0)
+
+
 def candidate_points(lo, hi, G, h, mixture, grid_levels=3):
     """Candidate points: vertices, edge midpoints, constraint face centers, centroid, axial points,
     plus a grid (for process factors)."""

@@ -41,6 +41,24 @@ def dfbetas(project, fit):
     return D[:, fit.term_idx]
 
 
+def is_glm(fit):
+    return getattr(fit, "family", None) in ("binomial", "poisson")
+
+
+def fitted_scale(fit):
+    """(observed, fitted, observed label, fitted label) for Predicted vs Actual and the report table.
+
+    GLM: observed proportion vs fitted probability (binomial) or observed count vs fitted mean (Poisson), i.e. on
+    the response scale (inverse link). Other fits: response vs prediction, on the transformed scale if any."""
+    if is_glm(fit):
+        if fit.family == "binomial":
+            return np.asarray(fit.y_orig, float), fit.fitted, "Observed proportion", "Fitted probability"
+        return np.asarray(fit.y_orig, float), fit.fitted, "Observed count", "Fitted mean count"
+    tr = fit.transform and fit.transform.get("kind", "none") != "none"
+    return (np.asarray(fit.y, float), np.asarray(fit.yhat, float),
+            "Actual" + (" (transformed scale)" if tr else ""), "Predicted" + (" (transformed scale)" if tr else ""))
+
+
 def bonferroni_limit(fit):
     return stats.t.ppf(1 - 0.05 / (2 * fit.n), fit.df_resid - 1) if fit.df_resid > 1 else np.inf
 
@@ -68,7 +86,7 @@ class Context:
         if key == "run":
             self.cvals, self.color_label = self.run.astype(float), "Run order"
         elif key == "pred":
-            self.cvals, self.color_label = np.asarray(self.fit.yhat, float), "Predicted"
+            self.cvals, self.color_label = fitted_scale(self.fit)[1], "Predicted"
         else:
             i = int(key)
             v = p.actual[self.rows, i]
@@ -143,7 +161,10 @@ def p_resid_pred(ax, ctx):
     x, y = np.asarray(ctx.fit.yhat)[idx], r[idx]
     m = _scatter(ax, ctx, x, y, idx)
     _limits(ax, ctx)
-    ax.set_xlabel("Predicted")
+    if is_glm(ctx.fit):
+        ax.set_xlabel(f"Linear predictor ({'logit' if ctx.fit.family == 'binomial' else 'log'} scale)")
+    else:
+        ax.set_xlabel("Predicted")
     ax.set_ylabel("Ext. studentized residuals")
     ax.set_title("Residuals vs Predicted")
     return x, y, idx, m
@@ -184,15 +205,13 @@ def p_resid_factor(ax, ctx, i):
 
 
 def p_pred_actual(ax, ctx):
-    f = ctx.fit
     idx = np.arange(ctx.n)
-    x, y = np.asarray(f.y, float), np.asarray(f.yhat, float)
+    x, y, xlab, ylab = fitted_scale(ctx.fit)
     m = _scatter(ax, ctx, x, y, idx)
     lo, hi = min(x.min(), y.min()), max(x.max(), y.max())
     ax.plot([lo, hi], [lo, hi], color="#334155", lw=1)
-    ax.set_xlabel("Actual" + (" (transformed scale)" if f.transform and f.transform.get("kind", "none") != "none"
-                              else ""))
-    ax.set_ylabel("Predicted")
+    ax.set_xlabel(xlab)
+    ax.set_ylabel(ylab)
     ax.set_title("Predicted vs Actual")
     return x, y, idx, m
 
@@ -261,12 +280,22 @@ def catalog(project, ctx):
              ("resid_run", "Residuals vs Run Order", p_resid_run)]
     for i in range(project.k):
         items.append((f"resid_f{i}", f"Residuals vs {project.factor_label(i)}", lambda ax, c, i=i: p_resid_factor(ax, c, i)))
-    items += [("pred_actual", "Predicted vs Actual", p_pred_actual), ("cook", "Cook's Distance", p_cook),
-              ("leverage", "Leverage", p_leverage), ("dffits", "DFFITS", p_dffits), ("hist", "Histogram of residuals", p_hist)]
+    influence = ctx is None or ctx.fit.has_influence     # Cook's and DFFITS are not computed for REML fits
+    items.append(("pred_actual", "Predicted vs Actual", p_pred_actual))
+    if influence:
+        items.append(("cook", "Cook's Distance", p_cook))
+    items.append(("leverage", "Leverage", p_leverage))
+    if influence:
+        items.append(("dffits", "DFFITS", p_dffits))
+    items.append(("hist", "Histogram of residuals", p_hist))
     if ctx is not None and ctx.dfb is not None:
         for k, lab in enumerate(ctx.dfb_labels):
             items.append((f"dfbetas{k}", f"DFBETAS - {lab}", lambda ax, c, k=k: p_dfbetas(ax, c, k)))
     return items
+
+
+# used when the preferred plot is not offered for the current fit (Cook's and DFFITS are not shown for REML)
+FALLBACK = {"cook": "leverage", "dffits": "hist"}
 
 
 class Panel(QWidget):
@@ -274,6 +303,7 @@ class Panel(QWidget):
         super().__init__()
         self.owner = owner
         self.key = default
+        self.pref = default              # plot chosen by the user; kept while it is not available
         lay = QVBoxLayout(self)
         lay.setContentsMargins(0, 0, 0, 0)
         lay.setSpacing(2)
@@ -292,13 +322,15 @@ class Panel(QWidget):
         self.cb.clear()
         for key, label, _ in items:
             self.cb.addItem(label, key)
-        i = self.cb.findData(self.key)
+        i = self.cb.findData(self.pref)
+        if i < 0:
+            i = self.cb.findData(FALLBACK.get(self.pref))
         self.cb.setCurrentIndex(i if i >= 0 else 0)
         self.key = self.cb.currentData()
         self.cb.blockSignals(False)
 
     def on_choice(self):
-        self.key = self.cb.currentData()
+        self.key = self.pref = self.cb.currentData()
         self.draw()
 
     def draw(self):
@@ -509,11 +541,13 @@ class DiagnosticsPanel(QWidget):
             self.btn_ex.setEnabled(False)
             return
         f = c.fit
+        pred = fitted_scale(f)[1] if is_glm(f) else np.asarray(f.yhat, float)
         parts = []
         for i in sorted(c.sel)[:6]:
             parts.append(f"<b>Run {c.run[i]}</b> (Std {c.rows[i] + 1}): actual {fmt(f.y_orig[i], 6)}, predicted "
-                         f"{fmt(float(np.asarray(f.yhat)[i]), 6)}, ext. stud. residual {fmt(f.stud_ext[i], 3)}, "
-                         f"leverage {fmt(f.leverage[i], 3)}, Cook's {fmt(f.cooks[i], 3)}")
+                         f"{fmt(float(pred[i]), 6)}, ext. stud. residual {fmt(f.stud_ext[i], 3)}, "
+                         f"leverage {fmt(f.leverage[i], 3)}"
+                         + (f", Cook's {fmt(f.cooks[i], 3)}" if f.has_influence else ""))
         more = f" … (+{len(c.sel) - 6})" if len(c.sel) > 6 else ""
         self.lbl.setText("<br>".join(parts) + more)
         self.lbl.setStyleSheet(f"color: {theme.INK};")
@@ -549,12 +583,21 @@ class DiagnosticsPanel(QWidget):
         lim_h = 2 * f.p / f.n
         lim_d = 2 * np.sqrt(f.p / f.n)
         lim_b = 2 / np.sqrt(f.n)
-        heads = ["Run", "Std", "Type", "Actual", "Predicted", "Residual", "Leverage", "Int. stud. resid.",
-                 "Ext. stud. resid.", "Cook's", "DFFITS"]
+        if is_glm(f):
+            _, pred, act_lab, pred_lab = fitted_scale(f)
+            res_lab = "Deviance resid."
+        else:
+            pred, act_lab, pred_lab, res_lab = np.asarray(f.yhat, float), "Actual", "Predicted", "Residual"
+        heads = ["Run", "Std", "Type", act_lab, pred_lab, res_lab, "Leverage", "Int. stud. resid.",
+                 "Ext. stud. resid."]
         cols = [c.run[o], c.rows[o] + 1, np.array([p.point_types[r] for r in c.rows[o]], object),
-                np.asarray(f.y_orig, float)[o], np.asarray(f.yhat, float)[o], np.asarray(f.resid, float)[o],
-                f.leverage[o], f.stud_int[o], f.stud_ext[o], f.cooks[o], f.dffits[o]]
-        limits = {6: lim_h, 8: lim_r, 9: 1.0, 10: lim_d}
+                np.asarray(f.y_orig, float)[o], pred[o], np.asarray(f.resid, float)[o],
+                f.leverage[o], f.stud_int[o], f.stud_ext[o]]
+        limits = {6: lim_h, 8: lim_r}
+        if f.has_influence:
+            heads += ["Cook's", "DFFITS"]
+            cols += [f.cooks[o], f.dffits[o]]
+            limits.update({9: 1.0, 10: lim_d})
         if c.dfb is not None:
             for k, lab in enumerate(c.dfb_labels):
                 heads.append(f"DFBETAS {lab}")
@@ -578,9 +621,13 @@ class DiagnosticsPanel(QWidget):
         self.table_model.set_data(heads, cols, fmt_cell, bg)
         self.table.resizeColumnsToContents()
         flagged = {k: int(np.sum(np.abs(np.nan_to_num(cols[k])) > lim)) for k, lim in limits.items()}
+        influence = (f"; Cook's > 1: {flagged[9]}; |DFFITS| > {lim_d:.3f}: {flagged[10]}" if f.has_influence
+                     else "")
         self.lbl_rep.setText(
             f"{f.n} runs analyzed" + (f", {len(p.excluded)} runs excluded" if p.excluded else "")
             + f". Red cells exceed the limit: |ext. stud. resid.| > {lim_r:.3f} (Bonferroni): {flagged[8]} runs; "
-            f"leverage > 2p/n = {lim_h:.3f}: {flagged[6]}; Cook's > 1: {flagged[9]}; |DFFITS| > {lim_d:.3f}: "
-            f"{flagged[10]}" + (f"; |DFBETAS| > {lim_b:.3f}." if c.dfb is not None else ".")
+            f"leverage > 2p/n = {lim_h:.3f}: {flagged[6]}" + influence
+            + (f"; |DFBETAS| > {lim_b:.3f}." if c.dfb is not None else ".")
+            + ("" if f.has_influence else " Cook's distance and DFFITS are not computed for split-plot (REML) "
+               "models, so they are not shown.")
             + " Double-click a row to highlight the run in the plots. The table can be copied to Excel (right-click).")

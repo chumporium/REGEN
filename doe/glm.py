@@ -12,15 +12,17 @@ FAMILIES = {"normal": "Normal (continuous)", "binomial": "Binomial (proportion /
             "poisson": "Poisson (counts)"}
 
 
-def _irls(X, y, family, m, max_iter=100, tol=1e-10):
+def _irls(X, y, family, m, max_iter=100, tol=1e-10, info=None):
+    """IRLS estimates. `info` (dict, optional) receives 'converged' and 'iterations'."""
     n, p = X.shape
     beta = np.zeros(p)
+    converged, it = False, 0
     if family == "binomial":
         pbar = np.clip((y.sum() + 0.5) / (m * n + 1.0), 1e-6, 1 - 1e-6)
         eta = np.full(n, np.log(pbar / (1 - pbar)))
     else:
         eta = np.log(np.maximum(y, 0.5))
-    for _ in range(max_iter):
+    for it in range(1, max_iter + 1):
         if family == "binomial":
             pr = np.clip(expit(eta), 1e-10, 1 - 1e-10)
             mu = m * pr
@@ -35,8 +37,11 @@ def _irls(X, y, family, m, max_iter=100, tol=1e-10):
         eta_new = X @ beta_new
         if np.max(np.abs(beta_new - beta)) < tol * (1 + np.max(np.abs(beta))):
             beta, eta = beta_new, eta_new
+            converged = True
             break
         beta, eta = beta_new, eta_new
+    if info is not None:
+        info.update(converged=converged, iterations=it, max_iter=max_iter)
     return beta, eta
 
 
@@ -82,6 +87,23 @@ class GlmResult(models.FitResult):
     def t_crit(self, level=0.95):
         return stats.norm.ppf(0.5 + level / 2)
 
+    @property
+    def coef_df(self):
+        return np.full(len(self.term_idx), np.inf)
+
+    def coef_tests(self, level=0.95):
+        """Wald z value, two-sided p-value, and critical value of each term coefficient."""
+        b, se = self.coef, self.coef_se
+        with np.errstate(divide="ignore", invalid="ignore"):
+            z = np.where(se > 0, b / se, np.nan)
+        return {"t": z, "p": 2 * stats.norm.sf(np.abs(z)), "crit": np.full(len(b), self.t_crit(level)),
+                "df": self.coef_df}
+
+    @property
+    def fitted(self):
+        """Fitted probability (binomial) or fitted mean count (Poisson) of each run used."""
+        return self._inv(np.asarray(self.yhat, float))
+
     def _inv(self, eta):
         return expit(eta) if self.family == "binomial" else np.exp(np.clip(eta, -700, 700))
 
@@ -117,7 +139,8 @@ def fit_glm(coded, y, terms, family="binomial", trials=1, mixture=False, blocks=
         raise ValueError("A Poisson response (counts) cannot be negative.")
     dc = models.design_columns(coded, terms, mixture, blk, space)
     X, p = dc.X, dc.X.shape[1]
-    beta, eta = _irls(X, y, family, m)
+    info = {}
+    beta, eta = _irls(X, y, family, m, info=info)
     mu, w = _mu_w(eta, family, m)
     XtWX = (X.T * w) @ X
     cov = np.linalg.pinv(XtWX)
@@ -193,7 +216,40 @@ def fit_glm(coded, y, terms, family="binomial", trials=1, mixture=False, blocks=
     res.family = family
     res.trials = m
     res.resid_var_for_poe = 0.0
+    res.converged, res.iterations = info["converged"], info["iterations"]
+    res.warnings = fit_warnings(res, eta, info)
     return res
+
+
+def fit_warnings(fit, eta, info):
+    """Convergence and (quasi-)complete separation warnings for an IRLS fit (plain text sentences)."""
+    out = []
+    if not info.get("converged", True):
+        out.append(f"The IRLS fit did not converge within {info.get('max_iter', 100)} iterations. "
+                   "The estimates and tests may not be reliable.")
+    if fit.family == "binomial":
+        pr = expit(eta)
+        n_ext = int(np.sum((pr < 1e-8) | (pr > 1 - 1e-8)))
+        if n_ext:
+            out.append(f"Fitted probabilities numerically 0 or 1 occurred for {n_ext} run"
+                       f"{'s' if n_ext > 1 else ''}. This indicates complete or quasi-complete separation: some "
+                       "coefficients tend to infinity, so their standard errors, z tests and odds ratios are not "
+                       "reliable. Remove terms from the model or add runs where the response changes.")
+        scale = "logit"
+    else:
+        mu = np.exp(np.clip(eta, -700, 700))
+        n_ext = int(np.sum(mu < 1e-8))
+        if n_ext:
+            out.append(f"Fitted means numerically 0 occurred for {n_ext} run{'s' if n_ext > 1 else ''} "
+                       "(all counts are 0 in that region). Some coefficients tend to minus infinity, so their "
+                       "standard errors, z tests and rate ratios are not reliable. Remove terms from the model or "
+                       "add runs.")
+        scale = "log"
+    big = [lab for lab, t, b in zip(fit.coef_labels(), fit.col_terms, fit.coef)
+           if not models.is_intercept(t) and abs(b) > 10]
+    if big and (out or not info.get("converged", True)):
+        out.append(f"Very large coefficients (|estimate| > 10 on the {scale} scale): {', '.join(big)}.")
+    return out
 
 
 def hosmer_lemeshow(y, pr, m, groups=10):
@@ -214,19 +270,14 @@ def hosmer_lemeshow(y, pr, m, groups=10):
 
 
 def sequential_summary(order_fits):
-    rows, prev = [], None
-    for order, fit in order_fits:
-        row = {"order": order, "fit": fit, "aliased": bool(fit.aliased), "seq_p": np.nan, "lof_p": np.nan}
-        if prev is not None:
+    """Likelihood-ratio test of each model against its nested reference model (see models.nested_sequence)."""
+    rows, sets = models.nested_sequence(order_fits)
+    for row in rows:
+        fit = row["fit"]
+        if row["ref"] is not None:
+            prev = rows[row["ref"]]["fit"]
             ddf = fit.p - prev.p
             if ddf > 0:
                 row["seq_p"] = float(stats.chi2.sf(max(prev.sse - fit.sse, 0), ddf))
-        rows.append(row)
-        prev = fit
-    suggested = "mean"
-    for r in rows[1:]:
-        if r["aliased"]:
-            break
-        if not np.isnan(r["seq_p"]) and r["seq_p"] < 0.05:
-            suggested = r["order"]
-    return rows, suggested
+        row["ref_order"] = rows[row["ref"]]["order"] if row["ref"] is not None else None
+    return rows, models.suggest_order(rows, sets)

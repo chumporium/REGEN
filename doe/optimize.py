@@ -1,4 +1,9 @@
-"""Numerical multi-response optimization with desirability functions (Derringer-Suich)."""
+"""Numerical multi-response optimization with desirability functions (Derringer and Suich, 1980).
+
+Each response gets an individual desirability d in [0, 1]; the shape exponent ("weight" s, t; 1 = linear, > 1 =
+the response must come closer to the goal before d rises, < 1 = d rises quickly) bends the ramp. The overall
+desirability D is the importance-weighted geometric mean of the d values.
+"""
 import numpy as np
 from scipy.optimize import minimize
 
@@ -11,7 +16,12 @@ GOALS = {
 }
 
 
+SHAPE_RANGE = (0.1, 10.0)
+
+
 def desirability(y, goal, low, high, target=None, w_low=1.0, w_high=1.0):
+    """Individual desirability. w_low / w_high: shape exponents s (rising side, toward the upper limit or the
+    target) and t (falling side, from the lower limit or the target)."""
     y = np.asarray(y, float)
     d = np.ones_like(y)
     if goal == "maximize":
@@ -30,17 +40,25 @@ def desirability(y, goal, low, high, target=None, w_low=1.0, w_high=1.0):
     return np.nan_to_num(d, nan=0.0)
 
 
-def overall_desirability(coded, criteria):
-    """criteria: list of dicts {fit, goal, low, high, target, importance}."""
+def criterion_desirability(y, c, shape=None):
+    """Individual desirability for one criterion dict; the shape exponent comes from `shape` or c["shape"]
+    (default 1 = linear) and is used for both sides (s = t)."""
+    w = float(shape if shape is not None else c.get("shape", 1.0) or 1.0)
+    return desirability(y, c["goal"], c["low"], c["high"], c.get("target"), w, w)
+
+
+def overall_desirability(coded, criteria, shapes=None):
+    """criteria: list of dicts {fit, goal, low, high, target, importance, shape (optional, default 1 = linear)}.
+    shapes: optional list of shape exponents, one per criterion, overriding c["shape"]."""
     coded = np.atleast_2d(coded)
     log_sum = np.zeros(coded.shape[0])
     total_w = 0.0
     zero = np.zeros(coded.shape[0], bool)
-    for c in criteria:
+    for n, c in enumerate(criteria):
         if c["goal"] == "none":
             continue
         y = c["fit"].predict(coded)
-        d = desirability(y, c["goal"], c["low"], c["high"], c.get("target"))
+        d = criterion_desirability(y, c, shapes[n] if shapes is not None else None)
         r = float(c.get("importance", 3))
         zero |= d <= 0
         log_sum += r * np.log(np.maximum(d, 1e-300))

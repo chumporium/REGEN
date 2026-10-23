@@ -29,6 +29,17 @@ def pure_error(coded, y):
     return (np.sqrt(ss / df) if df > 0 else np.nan), df, n_rep
 
 
+def noise_sd(project, j):
+    """Measurement noise of response j for the ANN fit diagnosis: the pure-error SD from replicated runs (response
+    units), or None when the data have no replicates."""
+    y_all = project.model_data[:, j]
+    rows = np.where(~np.isnan(y_all) & np.all(np.isfinite(project.coded), axis=1))[0]
+    if len(rows) < 3:
+        return None
+    s_pe = pure_error(project.coded[rows], y_all[rows])[0]
+    return float(s_pe) if np.isfinite(s_pe) and s_pe > 0 else None
+
+
 def assess(project, j, split_train=0.85):
     p = project
     y_all = p.model_data[:, j]
@@ -68,10 +79,11 @@ def assess(project, j, split_train=0.85):
     h1br = max_neurons(n_in, n_train, 2.0)
     st = "ok" if ratio >= 3 else ("warn" if ratio >= 1 else "bad")
     checks.append(_check("Training rows / weights ratio", f"{ratio:.2f} ({n_in}-2-1 network, {w2} weights)", st,
-                         f"With ±{n_train} training rows, the number of weights should be ≤ {n_train} "
-                         f"(≤ {2 * n_train} with trainbr). Safe limit for 1 hidden layer: {h1} neurons (trainlm) or "
-                         f"{h1br} neurons (trainbr). A ratio < 1 means even the smallest network has more parameters "
-                         "than data."))
+                         f"With ±{n_train} training rows, a network set by hand should have ≤ {n_train} weights "
+                         f"(≤ {2 * n_train} with trainbr): 1 hidden layer with ≤ {h1} neurons (trainlm) or "
+                         f"≤ {h1br} neurons (trainbr). The automatic architecture search has no weight limit by "
+                         "default; early stopping and cross-validation decide the size. A ratio < 1 means even the "
+                         "smallest network has more parameters than data."))
     res.update(h1=h1, h1br=h1br)
 
     # 3. number of levels of each numeric factor
@@ -114,7 +126,8 @@ def assess(project, j, split_train=0.85):
     else:
         checks.append(_check("Signal / noise ratio", "cannot be calculated", "info",
                              "There are no replicated points, so the noise level is unknown. Add a few replicates "
-                             "(for example center points) so the noise limit and overfitting can be assessed."))
+                             "(for example center points) so the noise limit and overfitting can be assessed. The "
+                             "ANN fit diagnosis uses the noise rule only when the data contain replicates."))
 
     # 6. response outliers (robust z based on median/MAD)
     med = np.median(y)
@@ -140,7 +153,8 @@ def assess(project, j, split_train=0.85):
     # 8. correlation between factors
     if len(p.num_idx) >= 2 and not p.is_mixture:
         R = np.corrcoef(coded[:, p.num_idx].T)
-        off = np.abs(R - np.eye(len(R)))
+        off = np.abs(R)
+        np.fill_diagonal(off, np.nan)
         rmax = float(np.nanmax(off))
         a, b = np.unravel_index(np.nanargmax(off), off.shape)
         st = "ok" if rmax < 0.5 else ("warn" if rmax < 0.9 else "bad")
@@ -210,15 +224,18 @@ def assess(project, j, split_train=0.85):
     rec.append("Algorithm: Bayesian Regularization (trainbr)" + (" - data < 50 runs, more resistant to overfitting."
                                                                    if N < 50 else " or Levenberg-Marquardt."))
     if N < 30:
-        rec.append("Data split: 85% training / 15% test without validation (trainbr), and choose the architecture "
-                   "with automatic architecture search (k-fold cross-validation) - more honest than a single random "
-                   "split.")
+        rec.append("Data split: keep the default 70% training / 15% validation / 15% test with early stopping, and "
+                   "choose the architecture with the automatic architecture search (k-fold cross-validation) - more "
+                   "honest than a single random split. Judge the fit by the cross-validated result.")
     else:
-        rec.append("Data split: 70/15/15 (trainlm) or 85/0/15 (trainbr).")
+        rec.append("Data split: the default 70% training / 15% validation / 15% test with early stopping.")
     h2 = max_neurons(n_in, n_train, 2.0, depth=2)
-    rec.append(f"Size limit: 1 hidden layer ≤ {max(h1br, 1)} neurons; 2 hidden layers ≤ {h2} neurons per layer "
-               "(trainbr, weights ≤ 2× training rows)." if h2 else
-               f"1 hidden layer is enough (≤ {max(h1br, 1)} neurons); not enough data for 2 hidden layers.")
+    rec.append("Network size: let the automatic architecture search choose it (no weight limit by default; early "
+               "stopping and cross-validation decide). For a network set by hand, "
+               + (f"1 hidden layer ≤ {max(h1br, 1)} neurons or 2 hidden layers ≤ {h2} neurons per layer keeps the "
+                  "weights ≤ 2× the training rows (trainbr)." if h2 else
+                  f"1 hidden layer with ≤ {max(h1br, 1)} neurons keeps the weights ≤ 2× the training rows "
+                  "(trainbr); there is not enough data for 2 hidden layers."))
     if res.get("noise"):
         rec.append(f"Realistic RMSE target ≈ {res['noise']:.4g} (equal to the noise). Anything smaller = overfitting.")
     if any(c["name"] == "Response distribution" and c["status"] == "warn" for c in checks):

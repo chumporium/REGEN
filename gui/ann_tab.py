@@ -59,19 +59,24 @@ def fit_status(m):
 
 def diagnosis_html(m):
     d = m.diagnosis or {}
-    st = d.get("status", "?")
+    st_split = d.get("status", "?")
     nm = getattr(m, "nmse", {}) or {}
-    h = ["<h3>Fit Diagnosis</h3>"]
     cv = m.cv_diag
+    st = fit_status(m)                  # headline: cross-validated status (check A) when a search was run
+    h = ["<h3>Fit Diagnosis</h3>"]
     if cv:
         h.append(f"<p class='{FIT_CLASS[cv['status']]}' style='font-size: 11pt'>{ann.STATUS[cv['status']]} "
                  f"<span class='note'>(result of {cv['scheme']} during architecture search)</span></p>"
                  f"<p>Training R² {fmt(cv['r2_train'], 4)}, validation R² {fmt(cv['r2_val'], 4)}, test R² "
                  f"{fmt(cv['q2'], 4)} - average over {cv['n_splits']} data splits, so more reliable than "
-                 "a single random split.</p><p><b>Final model data split</b> (one random split): "
-                 f"<span class='{FIT_CLASS[st]}'>{ann.STATUS[st]}</span></p>")
+                 "a single random split.</p>"
+                 "<h4>Single Train/Test Split (Final Model)</h4>"
+                 f"<p>Status on this one random split: <span class='{FIT_CLASS[st_split]}'>{ann.STATUS[st_split]}"
+                 "</span> <span class='note'>(secondary information; the cross-validated status above is the fit "
+                 "diagnosis)</span></p>")
     else:
-        h.append(f"<p class='{FIT_CLASS[st]}' style='font-size: 11pt'>{ann.STATUS[st]}</p>")
+        h.append(f"<p class='{FIT_CLASS[st_split]}' style='font-size: 11pt'>{ann.STATUS[st_split]} "
+                 "<span class='note'>(single train/test split)</span></p>")
     n_check = len(m.idx_val) + len(m.idx_test)
     if n_check < 10:
         h.append(f"<p class='note'>The final model has only {n_check} validation + test runs, so the diagnosis "
@@ -79,8 +84,8 @@ def diagnosis_html(m):
                  + (". Rely on the cross-validation result above." if cv else
                     " - run Search Architecture for a cross-validated diagnosis.") + "</p>")
     if d.get("notes"):
-        h.append("<p>" + "; ".join(d["notes"]) + ".</p>")
-    h.append("<table><tr><th class='l'>Data</th><th>R² (combined over outputs)</th><th>NMSE</th></tr>")
+        h.append("<p>" + ("Single split: " if cv else "") + "; ".join(d["notes"]) + ".</p>")
+    h.append("<table><tr><th class='l'>Data (single split)</th><th>R² (combined over outputs)</th><th>NMSE</th></tr>")
     for key in ("train", "val", "test"):
         v = nm.get(key, np.nan)
         if v is not None and np.isfinite(v):
@@ -90,13 +95,22 @@ def diagnosis_html(m):
                  f"<td>{fmt(d['noise_nmse'], 4)}</td></tr>")
     h.append("</table>")
     es = "enabled" if m.early_stop else "disabled"
+    crit = (" NMSE = MSE / response variance (0 = perfect, 1 = no better than the mean). Single split: "
+            "<b>overfitting</b> if the error on new data is > 2× the training error (and more than 0.02 above it); "
+            "<b>underfitting</b> if training R² is low and the error on new data is similar (insufficient "
+            "capacity).")
+    if cv:
+        crit += (" Cross-validation: <b>overfitting</b> if the test error is > 2× the training error, > 1.2× the "
+                 "lowest test error of all architectures and more than 0.02 above the training error; "
+                 "<b>underfitting</b> if the training error is > 1.5× the lowest test error and the test error is "
+                 "> 1.2× the lowest and more than 0.01 above it.")
+    crit += (" With replicated runs, a training error below half the measurement noise (pure error) also counts as "
+             "overfitting." + ("" if d.get("noise_nmse") else
+                               " This noise rule was not used here: it applies only when the data contain "
+                               "replicated runs."))
     h.append(f"<p class='note'>Early stopping {es}"
              + (f": weights taken from epoch {m.best_epoch} (lowest validation error), training stopped at epoch "
-                f"{m.epochs - 1} - {m.stop_reason}." if m.early_stop else f" ({m.stop_reason}).")
-             + " NMSE = MSE / response variance (0 = perfect, 1 = no better than the mean). Criteria: "
-               "<b>overfitting</b> if the error on new data > 2× the training error or the training error is below "
-               "measurement noise; <b>underfitting</b> if training R² is low and the error on new data is similar "
-               "(insufficient capacity).</p>")
+                f"{m.epochs - 1} - {m.stop_reason}." if m.early_stop else f" ({m.stop_reason}).") + crit + "</p>")
     if st == "over":
         h.append("<p class='warn'>Suggestion: reduce neurons/hidden layers, enable early stopping, use trainbr, or "
                  "run Automatic Architecture Search.</p>")
@@ -214,7 +228,8 @@ def weights_html(project, m):
     h.append("</table>")
     norm = getattr(m, "norm", "mapminmax")
     h.append(f"<h3>Normalization - {ann.NORMS[norm].split(' - ')[0]}</h3><table><tr><th class='l'>Variable</th>"
-             "<th>min (training data)</th><th>max (training data)</th><th>offset</th><th>scale</th><th>base</th></tr>")
+             "<th>min (training + validation)</th><th>max (training + validation)</th>"
+             "<th>offset</th><th>scale</th><th>base</th></tr>")
     for c, a, b, o, sc in zip(cols, m.xmin, m.xmax, m.x_off, m.x_scale):
         h.append(f"<tr><td class='l'>{c}</td><td>{fmt(a, 6)}</td><td>{fmt(b, 6)}</td><td>{fmt(o, 6)}</td>"
                  f"<td>{fmt(sc, 6)}</td><td>{fmt(m.x_base, 3)}</td></tr>")
@@ -231,7 +246,7 @@ def weights_html(project, m):
 
 
 def draw_network(fig, project, m, resp_label=None):
-    """Network architecture diagram: teal = positive weight, red = negative; thickness ∝ |weight|."""
+    """Network architecture diagram: blue = positive weight, red = negative; thickness ∝ |weight|."""
     ax = fig.add_subplot(111)
     layers, W_out, _ = m._unpack(m.weights)
     sizes = m.sizes + [m.n_out]
@@ -273,7 +288,7 @@ def draw_network(fig, project, m, resp_label=None):
     ax.set_ylim(-0.02, 1.14)
     ax.set_aspect("auto")
     ax.axis("off")
-    ax.set_title(f"ANN Architecture {m.arch}  -  teal = positive weight, red = negative, thickness ∝ |weight|",
+    ax.set_title(f"ANN Architecture {m.arch}  -  blue = positive weight, red = negative, thickness ∝ |weight|",
                  fontsize=10, pad=18)
 
 
@@ -387,9 +402,10 @@ def adequacy_html(project, j, a):
     h.append("</table>")
     if a["recommend"]:
         h.append("<h3>Recommendations</h3><ul>" + "".join(f"<li>{r}</li>" for r in a["recommend"]) + "</ul>")
-    h.append("<p class='note'>Rule of thumb: number of network weights ≤ number of training data (≤ 2× with "
-             "trainbr); ideally data ≥ 10× the number of weights. Noise (pure error) is the lower limit of a "
-             "reasonable RMSE.</p>")
+    h.append("<p class='note'>Rule of thumb for a network set by hand: number of network weights ≤ number of "
+             "training data (≤ 2× with trainbr); ideally data ≥ 10× the number of weights. The automatic "
+             "architecture search has no weight limit by default; early stopping and cross-validation decide the "
+             "size. Noise (pure error) is the lower limit of a reasonable RMSE.</p>")
     return "".join(h)
 
 
@@ -544,7 +560,11 @@ def learning_html(project, j, lc):
          f"<p>The ANN (hidden layers {'/'.join(map(str, lc['layers']))} neurons) is trained with 30% to 100% of the "
          "training data, then assessed on "
          f"{lc['n_test']} test runs never used for training. Repeated {lc['repeats']} times with different random "
-         "splits. If test R² still rises as data is added, more data would still help.</p>"]
+         "splits. If test R² still rises as data is added, more data would still help.</p>",
+         f"<p class='note'>Fixed settings for every point of the curve: {lc.get('restarts', 2)} restarts, "
+         f"{lc.get('max_epochs', 300)} epochs maximum, early stopping after {lc.get('max_fail', 6)} validation "
+         "failures (15% of each training subset is held out for validation when it has at least 10 runs). The "
+         "restarts, epochs and validation failures in Network Settings do not apply here.</p>"]
     st = lc.get("status")
     r2_now = 1 - lc["ann"][-1] if np.isfinite(lc["ann"][-1]) else np.nan
     if st == "enough":
@@ -561,9 +581,16 @@ def learning_html(project, j, lc):
                  f"({fmt(lc['r2_limit'], 3)}). This is an extrapolation: add runs gradually (e.g. half first), then "
                  "repeat the learning curve.</p>")
     elif st == "far":
+        n_full = int(lc.get("n_full", lc["sizes"][-1]))
         h.append(f"<p class='bad'><b>The data is still far from sufficient.</b> Test R² {fmt(r2_now, 3)} is still "
-                 f"rising sharply; the requirement is estimated at more than 5 times the current data (more than "
-                 f"{5 * N} runs). Consider RSM, fewer factors, or narrower factor ranges.</p>")
+                 f"rising sharply: the estimated number of training runs needed ({lc['n_star_fit']}) is more than 5 "
+                 f"times the largest training set used here (5 × {n_full} = {5 * n_full} training runs), that is "
+                 f"more than {5 * N} runs in total including the test runs. Consider RSM, fewer factors, or narrower "
+                 "factor ranges.</p>")
+    warn = ann.learning_warnings(lc) if st in ("more", "far", "enough") else []
+    if warn:
+        h.append("<p class='warn'>The run estimate is unreliable: " + "; ".join(warn) + ". Use it only as an "
+                 "indication of whether more runs help, not as the number of runs to add.</p>")
     elif st == "few":
         h.append(f"<p class='warn'><b>Too little data ({N} runs) for a reliable learning curve.</b> Each point of "
                  "the curve uses only a dozen or so runs, so the results vary widely. Treat it as a rough indication; "
@@ -697,7 +724,8 @@ class AnnTab(QWidget):
         for key, label in ann.NORMS.items():
             self.cb_norm.addItem(label, key)
         self.cb_norm.setToolTip("Brings factors & responses with different ranges to a common scale before training.\n"
-                                "Normalization parameters are computed from the training data only.")
+                                "Normalization parameters are computed from the training and validation data\n"
+                                "only (never from the test data).")
         self.cb_act = QComboBox()
         for key, label in ann.ACTIVATIONS.items():
             self.cb_act.addItem(label, key)
@@ -945,7 +973,7 @@ class AnnTab(QWidget):
     def set_project(self, project):
         self.cancel_search(wait=True)
         self.project = project
-        self._search = {}
+        self._search = project.ann_search if isinstance(getattr(project, "ann_search", None), dict) else {}
         self._adequacy = {}
         self._learning = project.learning if isinstance(getattr(project, "learning", None), dict) else {}
         self._loading = True
@@ -1048,9 +1076,11 @@ class AnnTab(QWidget):
         def done(lc):
             self._learning[j] = lc
             p.learning = self._learning
+            p.dirty = True
             self.show_learning()
             self.tabs.setCurrentWidget(self.tab_learn)
-            self.lbl_status.setText(f"Learning curve finished: {LEARN_STATUS.get(lc['status'], '')}")
+            unsure = " (run estimate unreliable)" if ann.learning_warnings(lc) and lc["status"] != "few" else ""
+            self.lbl_status.setText(f"Learning curve finished: {LEARN_STATUS.get(lc['status'], '')}{unsure}")
 
         self._start(job, done)
 
@@ -1061,7 +1091,9 @@ class AnnTab(QWidget):
             self.lc_txt.setHtml(REPORT_CSS + "<h2>Learning Curve</h2><p>Not run yet. Click <b>Learning Curve</b> "
                                 "to find out whether the data is sufficient for ANN, or how many more runs are "
                                 "needed. Architecture used: this response's ANN model (if already trained) or "
-                                "the neuron entry in Network Settings.</p>")
+                                "the neuron entry in Network Settings. Fixed settings: 2 restarts, 300 epochs "
+                                "maximum, early stopping after 6 validation failures (the restarts, epochs and "
+                                "validation failures in Network Settings do not apply).</p>")
             self.lc_fig.message("No learning curve yet")
             return
         self.lc_txt.setHtml(REPORT_CSS + learning_html(self.project, j, lc))
@@ -1146,9 +1178,10 @@ class AnnTab(QWidget):
             return
         kw["restarts"], note = self._restarts_for(kw)
         js = groups[0]
+        noise = [adequacy.noise_sd(p, j) for j in js]       # pure-error SD (None without replicated runs)
 
         def job(report, cancelled):
-            return p.build_ann(js, **kw, cancel=cancelled,
+            return p.build_ann(js, **kw, noise=noise, cancel=cancelled,
                                progress=lambda i, n: report(f"Training {group_label(p, js)}: restart {i + 1}/{n}"
                                                             + (f" ({note})" if note else ""), i, n))
 
@@ -1177,7 +1210,8 @@ class AnnTab(QWidget):
                 "patience": self.sp_patience.value(), "max_fail": kw["max_fail"],
                 "weight_ratio": self.sp_ratio.value() or float("inf"), "n_jobs": kw["n_jobs"]}
         coded, data, space = p.coded.copy(), p.model_data.copy(), p.space
-        noise = {j: None for j in range(len(p.responses))}
+        # measurement noise for the overfitting rules: pure-error SD from replicated runs (None without replicates)
+        noise = {j: adequacy.noise_sd(p, j) for js in groups for j in js}
         final_kw = {**kw, "early_stop": True if kw["split"][1] > 0 else kw["early_stop"]}
 
         def job(report, cancelled):
@@ -1229,6 +1263,7 @@ class AnnTab(QWidget):
                 res["rsm_cv"] = p.rsm_cv(js, res["rows"], res["splits"])
                 for j in js:
                     self._search[j] = res
+                p.ann_search = self._search
                 p.set_ann(m)
                 if self.chk_use_after.isChecked():
                     for j in js:

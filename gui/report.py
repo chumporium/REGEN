@@ -41,7 +41,7 @@ def summary_html(project, j, rows, suggested, heading="h2"):
     h = [f"<{heading}>Fit Summary - {project.response_label(j)}</{heading}>"]
     if not rows:
         return "".join(h) + ("<p class='note'>Fit Summary is not available for split-plot (REML) analysis. "
-                             "Choose a model, then use the Wald tests on the ANOVA and Backward Elimination tabs.</p>")
+                             "Choose a model, then use the Wald F tests on the Split-Plot (REML) tab and the Backward Elimination button.</p>")
     glm = project.analysis_kind(j) == "glm"
     if glm:
         h.append("<table><tr><th class='l'>Source</th><th>Sequential p (LR)</th><th>Deviance</th>"
@@ -76,7 +76,7 @@ def summary_html(project, j, rows, suggested, heading="h2"):
                  f"<td class='l'>{' '.join(note)}</td></tr>")
     h.append("</table>")
     h.append("<p class='note'><b>How to read:</b> choose the highest-order model whose sequential p is "
-             "&lt; 0.05, whose lack of fit is not significant (p &gt; 0.10), that is not <i>aliased</i>, and "
+             "&lt; 0.05, whose lack of fit is not significant (p ≥ 0.05), that is not <i>aliased</i>, and "
              "whose Adjusted R² and Predicted R² are high.</p>")
     if suggested == "mean":
         h.append("<p class='ns'>No model is significant compared with the mean.</p>")
@@ -171,10 +171,9 @@ def _coef_table(fit, extra_cols=None, zstat=False):
     h = ["<table><tr><th class='l'>Term</th><th>Estimate</th><th>Std. Error</th>"
          f"<th>{lab}</th><th>p-value</th><th>95% CI Low</th><th>95% CI High</th>"
          + "".join(f"<th>{c}</th>" for c, _ in (extra_cols or [])) + "</tr>"]
-    crit = fit.t_crit()
+    ct = fit.coef_tests()
     for n, (lb, b, se) in enumerate(zip(fit.coef_labels(), fit.coef, fit.coef_se)):
-        tv = b / se if se > 0 else np.nan
-        pv = 2 * (stats.norm.sf(abs(tv)) if zstat else stats.t.sf(abs(tv), max(fit.df_resid, 1)))
+        tv, pv, crit = ct["t"][n], ct["p"][n], ct["crit"][n]
         h.append(f"<tr><td class='l'>{lb}</td><td>{fmt(b)}</td><td>{fmt(se)}</td><td>{fmt(tv, 4)}</td>"
                  f"<td class='{p_class(pv)}'>{fmt_p(pv)}</td><td>{fmt(b - crit * se)}</td><td>{fmt(b + crit * se)}</td>"
                  + "".join(f"<td>{fmt(fn(b), 5)}</td>" for _, fn in (extra_cols or [])) + "</tr>")
@@ -190,6 +189,7 @@ def glm_html(project, j, fit, heading="h2"):
          f"<p class='note'>Link: {'logit' if fam == 'binomial' else 'log'}. "
          + (f"Trials per run = {fmt(fit.trials)}. " if fam == "binomial" else "")
          + "Terms are tested with the likelihood ratio (χ²).</p>"]
+    h += [f"<p class='ns'><b>Warning:</b> {w}</p>" for w in getattr(fit, "warnings", [])]
     h.append("<table><tr><th class='l'>Source</th><th>χ²</th><th>df</th><th>p-value</th><th class='l'></th></tr>")
     for a in fit.anova:
         if a.source.startswith("Residual"):
@@ -316,6 +316,8 @@ def design_html(project):
     p = project
     unit = "Component" if p.is_mixture else "Factor"
     h = [f"<h2>Design Summary</h2><p><b>{p.design_description()}</b></p>"]
+    if p.options.get("seed") is not None:
+        h.append(f"<p class='note'>Random seed: {p.options['seed']}</p>")
     h.append(f"<table><tr><th class='l'>{unit}</th><th class='l'>Name</th><th class='l'>Unit</th>"
              + ("<th>Lower Limit</th><th>Upper Limit</th>" if p.is_mixture else "<th>Low (-1)</th><th>High (+1)</th>")
              + "</tr>")
@@ -327,8 +329,10 @@ def design_html(project):
     h.append("</table>")
     if p.constraints:
         h.append("<p><b>Constraint:</b> " + "; ".join(c["text"] for c in p.constraints) + "</p>")
+    excluded = set(p.excluded)
     h.append("<h3>Data Sheet</h3><table><tr><th>Std</th><th>Run</th>"
              + ("<th>Block</th>" if p.n_blocks > 1 else "") + "<th class='l'>Type</th>"
+             + ("<th class='l'>Excluded</th>" if excluded else "")
              + "".join(f"<th>{designs.LETTERS[i]}: {f.name}</th>" for i, f in enumerate(p.factors))
              + "".join(f"<th>R{j + 1}: {r.name}</th>" for j, r in enumerate(p.responses)) + "</tr>")
     actual = p.actual
@@ -337,9 +341,13 @@ def design_html(project):
         h.append(f"<tr><td>{idx + 1}</td><td>{p.run_order[idx]}</td>"
                  + (f"<td>{p.blocks[idx]}</td>" if p.n_blocks > 1 else "")
                  + f"<td class='l'>{p.point_types[idx]}</td>"
+                 + (f"<td class='l'>{'Yes' if idx in excluded else ''}</td>" if excluded else "")
                  + "".join(f"<td>{p.format_value(i, v)}</td>" for i, v in enumerate(actual[idx]))
                  + "".join(f"<td>{'' if np.isnan(v) else fmt(v, 6)}</td>" for v in p.data[idx]) + "</tr>")
     h.append("</table>")
+    if excluded:
+        h.append(f"<p class='note'>Excluded runs ({len(excluded)}, marked in the Excluded column) are shown with "
+                 "their data but are left out of the analysis.</p>")
     if len(order) > PDF_MAX_ROWS:
         h.append(f"<p class='note'>Showing {PDF_MAX_ROWS} of {len(order)} runs. The complete data are in the Excel "
                  "export.</p>")
@@ -351,23 +359,23 @@ def optimization_html(project, criteria, solutions, max_rows=10):
     p = project
     h = ["<h2>Numerical Optimization (Desirability)</h2><h3>Criteria</h3>",
          "<table><tr><th class='l'>Name</th><th class='l'>Goal</th><th>Lower Limit</th><th>Upper Limit</th>"
-         "<th>Target</th><th>Importance</th></tr>"]
+         "<th>Target</th><th>Importance</th><th>Shape</th></tr>"]
     for i, f in enumerate(p.factors):
         if f.categoric:
             h.append(f"<tr><td class='l'>{p.factor_label(i)}</td><td class='l'>All levels</td>"
-                     "<td></td><td></td><td></td><td></td></tr>")
+                     "<td></td><td></td><td></td><td></td><td></td></tr>")
             continue
         c = p.opt_criteria.get(f"f{i}", {"low": f.low, "high": f.high})
         h.append(f"<tr><td class='l'>{p.factor_label(i)}</td><td class='l'>In range</td>"
-                 f"<td>{fmt(c['low'])}</td><td>{fmt(c['high'])}</td><td></td><td></td></tr>")
+                 f"<td>{fmt(c['low'])}</td><td>{fmt(c['high'])}</td><td></td><td></td><td></td></tr>")
     if p.constraints:
-        h.append("<tr><td class='l' colspan='6'>Constraint: " + "; ".join(c["text"] for c in p.constraints)
+        h.append("<tr><td class='l' colspan='7'>Constraint: " + "; ".join(c["text"] for c in p.constraints)
                  + "</td></tr>")
     for c in criteria:
         target = fmt(c.get("target")) if c["goal"] == "target" else ""
         h.append(f"<tr><td class='l'>{c.get('label') or p.response_label(c['index'])}</td><td class='l'>{GOALS[c['goal']]}</td>"
                  f"<td>{fmt(c['low'])}</td><td>{fmt(c['high'])}</td><td>{target}</td>"
-                 f"<td>{'+' * int(c.get('importance', 3))}</td></tr>")
+                 f"<td>{'+' * int(c.get('importance', 3))}</td><td>{fmt(c.get('shape', 1.0))}</td></tr>")
     h.append("</table><h3>Solutions</h3><table><tr><th>No</th>"
              + "".join(f"<th>{f.name}</th>" for f in p.factors)
              + "".join(f"<th>{r.name}</th>" for r in p.responses) + "<th>Desirability</th></tr>")
@@ -569,10 +577,12 @@ def write_excel(p, path):
     ws = wb.active
     ws.title = "Design"
     head_fill = PatternFill("solid", fgColor="E8EEF6")
+    excluded = set(p.excluded)
     ws.append([p.design_description()])
     ws["A1"].font = Font(bold=True, size=12)
-    ws.append([])
-    headers = ["Std", "Run"] + (["Block"] if p.n_blocks > 1 else []) + ["Type"] + \
+    ws.append(["Excluded runs (marked in the Excluded column) are kept in this sheet but left out of the analysis."]
+              if excluded else [])
+    headers = ["Std", "Run"] + (["Block"] if p.n_blocks > 1 else []) + ["Type"] + (["Excluded"] if excluded else []) + \
               [p.factor_label(i) for i in range(p.k)] + [p.response_label(j) for j in range(len(p.responses))]
     ws.append(headers)
     for c in ws[3]:
@@ -582,7 +592,7 @@ def write_excel(p, path):
     actual = p.actual
     for idx in p.display_order():
         ws.append([int(idx + 1), int(p.run_order[idx])] + ([int(p.blocks[idx])] if p.n_blocks > 1 else [])
-                  + [p.point_types[idx]]
+                  + [p.point_types[idx]] + (["Yes" if idx in excluded else None] if excluded else [])
                   + [p.format_value(i, v) if p.factors[i].categoric else (None if np.isnan(v) else float(v))
                      for i, v in enumerate(actual[idx])]
                   + [None if np.isnan(v) else float(v) for v in p.data[idx]])

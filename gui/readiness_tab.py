@@ -60,7 +60,8 @@ def readiness_html(p, j, a, overview=None):
         h.append("<p class='ok'>No recommendations - the data are already good for modeling and optimization.</p>")
     h.append("<p class='note'>Score = mean of the check statuses (Good = 100, Needs attention = 50, Problem = 0). "
              "The modeling score uses the data, structure and response quality groups; the optimization score adds "
-             "optimization readiness. ≥ 85 ready, 60–85 adequate, < 60 not ready yet.</p>")
+             "optimization readiness. Verdict: ≥ 85 Ready; 60 to below 85 Fair - some things need fixing; "
+             "below 60 Not ready yet.</p>")
     return "".join(h)
 
 
