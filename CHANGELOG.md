@@ -2,6 +2,9 @@
 
 Versions 1 to 6 were developed under the name DOE Studio.
 
+## Unreleased
+- Four multi-objective case studies: biodiesel production (face-centered CCD, 4 objectives), CNC turning (60 historical runs, 3 nonlinear objectives for the ANN), concrete mix paste (constrained mixture, 3 objectives) and a polygeneration plant (80 simulated runs, 5 decision variables, 3 objectives). Their optimization goals are preset.
+
 ## 7.1.0
 - User manual (PDF, Help > User Manual or F1) that explains every page with its theory and worked examples.
 Sensitivity & Parametric Study (new page under Optimization)

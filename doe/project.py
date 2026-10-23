@@ -1346,6 +1346,111 @@ def sample_ann_project():
     return p
 
 
+def _lhs_unit(rng, n, k):
+    """Latin hypercube in [0, 1]^k (one point per stratum and factor)."""
+    return (np.argsort(rng.random((k, n)), axis=1).T + rng.random((n, k))) / n
+
+
+def sample_biodiesel_project():
+    """Multi-objective example: biodiesel transesterification, face-centered CCD with 4 factors and 4 responses
+    (yield to maximize; energy use, production cost and soap formation to minimize)."""
+    factors = [Factor("Temperature", "°C", 45, 65), Factor("Catalyst", "wt%", 0.5, 1.5),
+               Factor("Methanol:Oil Ratio", "mol/mol", 4, 10), Factor("Reaction Time", "min", 30, 90)]
+    responses = [Response("Yield", "%"), Response("Energy Use", "kWh/kg"), Response("Production Cost", "USD/kg"),
+                 Response("Soap Formation", "%")]
+    p = Project.create("ccd", factors, responses, seed=21, alpha_type="face", center_points=6)
+    A, B, C, D = p.coded.T
+    rng = np.random.default_rng(21)
+    y1 = 92 + 2.5 * A + 3.2 * B + 2.8 * C + 1.8 * D - 1.2 * A * B + 0.8 * C * D \
+        - 1.9 * A ** 2 - 2.4 * B ** 2 - 1.6 * C ** 2 - 1.1 * D ** 2 + rng.normal(0, 0.5, p.n)
+    y2 = 1.05 + 0.12 * A + 0.02 * B + 0.09 * C + 0.14 * D + 0.03 * A * D + 0.02 * A ** 2 + rng.normal(0, 0.012, p.n)
+    y3 = 0.82 + 0.035 * A + 0.055 * B + 0.07 * C + 0.03 * D + 0.015 * B * C + 0.02 * C ** 2 \
+        + rng.normal(0, 0.008, p.n)
+    y4 = 1.4 + 0.25 * A + 0.55 * B - 0.05 * C + 0.1 * D + 0.12 * A * B + 0.08 * B ** 2 + rng.normal(0, 0.05, p.n)
+    p.data = np.column_stack([np.round(y1, 2), np.round(y2, 3), np.round(y3, 3), np.round(y4, 2)])
+    p.opt_criteria = {0: {"goal": "maximize"}, 1: {"goal": "minimize"}, 2: {"goal": "minimize"},
+                      3: {"goal": "minimize"}}
+    p.dirty = False
+    return p
+
+
+def sample_turning_project():
+    """Multi-objective ANN example: CNC turning, 60 historical runs (Latin hypercube), 3 nonlinear responses
+    (surface roughness and tool wear to minimize, material removal rate to maximize). Roughness follows the
+    geometric f^2/(32 r) law with a built-up-edge peak near 110 m/min, which a quadratic model cannot follow."""
+    rng = np.random.default_rng(31)
+    u = _lhs_unit(rng, 60, 4)
+    v, f, d, r = 80 + 160 * u[:, 0], 0.05 + 0.25 * u[:, 1], 0.5 + 2.0 * u[:, 2], 0.4 + 0.8 * u[:, 3]
+    ra = 1000 * f ** 2 / (32 * r) * (1 + 1.2 * np.exp(-((v - 110) / 22) ** 2)) + 0.25 + rng.normal(0, 0.08, 60)  # built-up edge
+    mrr = v * f * d * (1 + rng.normal(0, 0.02, 60))
+    wear = 0.08 * (v / 100) ** 2.2 * (f / 0.1) ** 0.5 * d ** 0.3 + rng.normal(0, 0.006, 60)
+    factors = [Factor("Cutting Speed", "m/min", 80, 240), Factor("Feed", "mm/rev", 0.05, 0.30),
+               Factor("Depth of Cut", "mm", 0.5, 2.5), Factor("Nose Radius", "mm", 0.4, 1.2)]
+    responses = [Response("Surface Roughness Ra", "µm"), Response("Material Removal Rate", "cm³/min"),
+                 Response("Tool Wear", "mm")]
+    p = Project.from_table(factors, responses,
+                           np.column_stack([np.round(v, 1), np.round(f, 3), np.round(d, 2), np.round(r, 2)]),
+                           np.column_stack([np.round(ra, 3), np.round(mrr, 2),
+                                            np.round(np.clip(wear, 0.005, None), 4)]))
+    p.opt_criteria = {0: {"goal": "minimize"}, 1: {"goal": "maximize"}, 2: {"goal": "minimize"}}
+    p.dirty = False
+    return p
+
+
+def sample_concrete_project():
+    """Multi-objective mixture example: paste of a concrete mix (cement, fly ash, water; % of the paste mass),
+    D-optimal constrained mixture design, 3 responses (strength to maximize; cost and CO2 emission to minimize)."""
+    from . import constraints as cons
+    factors = [Factor("Cement", "%", 45, 0, upper=75), Factor("Fly Ash", "%", 0, 0, upper=30),
+               Factor("Water", "%", 20, 0, upper=35)]
+    responses = [Response("Compressive Strength", "MPa"), Response("Material Cost", "USD/t"),
+                 Response("CO2 Emission", "kg/t")]
+    p = Project.create("optimal_mixture", factors, responses, seed=41, mixture_total=100,
+                       constraints=cons.parse_many("C - 0.35A - 0.35B >= 0\n0.6A + 0.6B - C >= 0", 3),
+                       criterion="D", n_lof=4, n_rep=4)
+    x = p.actual / 100.0
+    rng = np.random.default_rng(41)
+    wb = x[:, 2] / (x[:, 0] + x[:, 1])
+    fa = x[:, 1] / (x[:, 0] + x[:, 1])
+    strength = 105 * np.exp(-1.9 * wb) * (1 - 0.55 * fa + 0.35 * fa ** 2) + rng.normal(0, 0.8, p.n)
+    cost = 1000 * (0.135 * x[:, 0] + 0.115 * x[:, 1] + 0.002 * x[:, 2]) + rng.normal(0, 0.6, p.n)  # processed fly ash
+    co2 = 1000 * (0.93 * x[:, 0] + 0.03 * x[:, 1]) + rng.normal(0, 3.0, p.n)
+    p.data = np.column_stack([np.round(strength, 2), np.round(cost, 2), np.round(co2, 1)])
+    p.opt_criteria = {0: {"goal": "maximize"}, 1: {"goal": "minimize"}, 2: {"goal": "minimize"}}
+    p.dirty = False
+    return p
+
+
+def sample_polygeneration_project():
+    """Multi-objective example: polygeneration plant (geothermal heat, organic Rankine cycle, absorption cooling and
+    reverse-osmosis desalination), 80 simulated runs (Latin hypercube) of an illustrative thermodynamic and
+    thermoeconomic model; 3 responses (exergy efficiency to maximize; product cost and environmental impact to
+    minimize)."""
+    rng = np.random.default_rng(51)
+    u = _lhs_unit(rng, 80, 5)
+    T, P, pinch = 160 + 60 * u[:, 0], 1000 + 1000 * u[:, 1], 5 + 10 * u[:, 2]
+    rr, tinj = 0.35 + 0.4 * u[:, 3], 50 + 40 * u[:, 4]
+    tn, pn, dt, rn, ti = u.T
+    eff = 14 + 5.0 * tn + 3.2 * (1 - np.exp(-2.5 * pn)) - 2.2 * dt + 0.6 * rn - 2.8 * ti - 1.0 * tn * ti \
+        + rng.normal(0, 0.15, 80)
+    cost = 21 - 3.0 * tn - 1.6 * pn + 0.6 * pn ** 2 + 3.5 * np.exp(-2.2 * dt) - 1.4 * rn + 1.2 * rn ** 2 + 2.2 * ti \
+        + rng.normal(0, 0.2, 80)
+    impact = 3.1 + 0.9 * tn + 0.5 * pn - 0.4 * rn + 0.35 * np.exp(-2.2 * dt) - 0.3 * ti + 0.2 * tn * pn \
+        + rng.normal(0, 0.03, 80)
+    factors = [Factor("Geothermal Temperature", "°C", 160, 220), Factor("Turbine Inlet Pressure", "kPa", 1000, 2000),
+               Factor("Pinch Point", "°C", 5, 15), Factor("RO Recovery Ratio", "", 0.35, 0.75),
+               Factor("Reinjection Temperature", "°C", 50, 90)]
+    responses = [Response("Exergy Efficiency", "%"), Response("Product Cost", "USD/GJ"),
+                 Response("Environmental Impact", "mPts/h")]
+    p = Project.from_table(factors, responses,
+                           np.column_stack([np.round(T, 1), np.round(P, 0), np.round(pinch, 2), np.round(rr, 3),
+                                            np.round(tinj, 1)]),
+                           np.column_stack([np.round(eff, 3), np.round(cost, 3), np.round(impact, 4)]))
+    p.opt_criteria = {0: {"goal": "maximize"}, 1: {"goal": "minimize"}, 2: {"goal": "minimize"}}
+    p.dirty = False
+    return p
+
+
 # case study gallery: (key, title, category, function, description)
 CASES = [
     ("rsm", "Extraction Optimization (Box-Behnken)", "Response Surface", sample_project,
@@ -1373,6 +1478,22 @@ CASES = [
      "Historical data, 40 runs (Latin hypercube) with a strongly nonlinear pattern: pH optimum, kinetics, Langmuir "
      "isotherm. Good for trying the data readiness assessment, automatic ANN architecture search, normalization, "
      "and the RSM vs ANN comparison."),
+    ("biodiesel", "Biodiesel Production (4 Objectives)", "Multi-objective", sample_biodiesel_project,
+     "Face-centered CCD, 4 factors (temperature, catalyst, methanol:oil ratio, time), 30 runs. Maximize yield and "
+     "minimize energy use, production cost and soap formation: NSGA-III with four objectives, hypervolume stop, "
+     "TOPSIS, parallel coordinates, and the sensitivity study."),
+    ("turning", "CNC Turning (ANN, 3 Objectives)", "Multi-objective", sample_turning_project,
+     "60 historical runs (Latin hypercube), 4 factors (cutting speed, feed, depth of cut, nose radius). Minimize "
+     "surface roughness and tool wear, maximize material removal rate. Strongly nonlinear: multi-output ANN, "
+     "architecture search, learning curve, and the ANN vs RSM front comparison."),
+    ("concrete", "Concrete Mix Paste (Mixture, 3 Objectives)", "Multi-objective", sample_concrete_project,
+     "D-optimal constrained mixture of cement, fly ash and water (water/binder ratio 0.35 to 0.60). Maximize "
+     "compressive strength, minimize material cost and CO2 emission: Pareto front of a mixture in the ternary "
+     "region."),
+    ("polygen", "Polygeneration Plant (3 Objectives)", "Multi-objective", sample_polygeneration_project,
+     "80 simulated runs (Latin hypercube) of an illustrative geothermal polygeneration model (power, cooling, "
+     "fresh water), 5 decision variables. Maximize exergy efficiency, minimize product cost and environmental "
+     "impact: ANN, NSGA-III, parametric study and significance of the decision variables."),
 ]
 
 
