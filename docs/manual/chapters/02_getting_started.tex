@@ -215,23 +215,42 @@ opening, the Data page is shown.
 \begin{figure}[htbp]
 \centering
 \includegraphics[width=0.65\linewidth]{case_studies.png}
-\caption{The Case Studies dialog with the first case selected.}
+\caption{The Case Studies dialog with the first of the twelve cases selected.}
 \label{fig:ch02-cases}
 \end{figure}
 
-The eight built-in case studies (\menupath{File $\rightarrow$ Case Studies\dots}, Figure~\ref{fig:ch02-cases})
+The twelve built-in case studies (\menupath{File $\rightarrow$ Case Studies\dots}, Figure~\ref{fig:ch02-cases})
 cover every analysis family of REGEN. Select a case in the list to see its description, then click \ui{Open Case
 Study} (or double-click). The project opens on the Data page as an untitled project; it can be edited and saved as
 your own project. The data are simulated from known equations with Gaussian noise and fixed random seeds, so every
 user sees exactly the same numbers, and the ``true'' behavior is known, which makes the cases suitable for learning
-and for checking the methods. Table~\ref{tab:ch02-cases} lists the cases.
+and for checking the methods. They are illustrative simulated data, not measurements from a real laboratory or plant.
+Table~\ref{tab:ch02-cases} lists the cases.
+
+The last four cases (category \ui{Multi-objective}) are made for multi-objective optimization. Their optimization goals
+are preset: when the case opens, the \ui{Goal} column of the \ui{Desirability} and \ui{NSGA-II / III} pages already
+contains \ui{Maximize} or \ui{Minimize} for every response, so you can run the optimization at once.
+\begin{itemize}
+  \item \textbf{Biodiesel Production (4 Objectives)}: a designed experiment (face-centered CCD) with four conflicting
+        responses. It shows NSGA-III with four objectives, the automatic stop with the Monte Carlo hypervolume
+        (check~C), TOPSIS and the parallel coordinates graph (Chapter~\ref{chap:8}).
+  \item \textbf{CNC Turning (ANN, 3 Objectives)}: historical runs with a response (surface roughness) that a quadratic
+        model cannot follow, because of a built-up-edge peak at low cutting speed. It shows when an ANN is the more
+        trustworthy model and how check~D reveals an RSM front that extrapolates (Chapter~\ref{chap:8}).
+  \item \textbf{Concrete Mix Paste (Mixture, 3 Objectives)}: a constrained mixture with two ratio constraints; the
+        Pareto front lies inside the ternary region (Chapter~\ref{chap:11}).
+  \item \textbf{Polygeneration Plant (3 Objectives)}: 80 simulated runs of an illustrative thermodynamic and
+        thermoeconomic model of a geothermal plant that produces power, cooling and fresh water. It is the
+        worked example of a complete multi-objective study in Chapter~\ref{chap:11} and the sensitivity example of
+        Chapter~\ref{chap:9}.
+\end{itemize}
 
 \begin{table}[htbp]
 \centering
 \caption{Built-in case studies (in the order of the dialog).}
 \label{tab:ch02-cases}
 \scriptsize
-\begin{tabularx}{\linewidth}{@{}p{0.17\linewidth}p{0.18\linewidth}p{0.22\linewidth}p{0.12\linewidth}X@{}}
+\begin{tabularx}{\linewidth}{@{}p{0.17\linewidth}p{0.17\linewidth}p{0.21\linewidth}p{0.15\linewidth}X@{}}
 \toprule
 Case (category) & Design & Factors (range) & Responses & Good for learning \\
 \midrule
@@ -286,6 +305,33 @@ pH 2--10; Adsorbent Dose 0.5--4 g/L; Contact Time 10--120 min; Initial Concentra
 Removal Efficiency (\%) &
 Strongly nonlinear data: data readiness, ANN adequacy, architecture search, learning curve, normalization, RSM vs
 ANN \\
+\addlinespace
+Biodiesel Production (4 Objectives) (Multi-objective) &
+Face-centered CCD ($\alpha=1$), 4 factors, 6 center points, 30 runs &
+Temperature 45--65 \textdegree C; Catalyst 0.5--1.5 wt\%; Methanol:Oil Ratio 4--10 mol/mol; Reaction Time 30--90 min &
+Yield (\%, max), Energy Use (kWh/kg, min), Production Cost (USD/kg, min), Soap Formation (\%, min) &
+NSGA-III with four objectives, hypervolume stop (check C), TOPSIS, objective matrix, parallel coordinates \\
+\addlinespace
+CNC Turning (ANN, 3 Objectives) (Multi-objective) &
+Historical data, 60 runs (Latin hypercube) &
+Cutting Speed 80--240 m/min; Feed 0.05--0.30 mm/rev; Depth of Cut 0.5--2.5 mm; Nose Radius 0.4--1.2 mm &
+Surface Roughness Ra (\textmu m, min), Material Removal Rate (cm\textsuperscript{3}/min, max), Tool Wear (mm, min) &
+A response that RSM cannot follow (built-up-edge peak): ANN architecture search, learning curve, ANN vs RSM fronts
+(check D) \\
+\addlinespace
+Concrete Mix Paste (Mixture, 3 Objectives) (Multi-objective) &
+D-optimal constrained mixture, quadratic model, total 100, 4 lack-of-fit and 4 replicate points, 14 runs &
+Cement 45--75 \%; Fly Ash 0--30 \%; Water 20--35 \% (of the paste); water/binder ratio 0.35--0.60 &
+Compressive Strength (MPa, max), Material Cost (USD/t, min), CO2 Emission (kg/t, min) &
+Pareto front of a mixture inside a constrained ternary region; desirability contour \\
+\addlinespace
+Polygeneration Plant (3 Objectives) (Multi-objective) &
+80 simulated runs (Latin hypercube) of an illustrative plant model &
+Geothermal Temperature 160--220 \textdegree C; Turbine Inlet Pressure 1000--2000 kPa; Pinch Point 5--15 \textdegree C;
+RO Recovery Ratio 0.35--0.75; Reinjection Temperature 50--90 \textdegree C &
+Exergy Efficiency (\%, max), Product Cost (USD/GJ, min), Environmental Impact (mPts/h, min) &
+Complete multi-objective study: RSM and ANN, NSGA-III, checks C and D, parametric study, significance of the decision
+variables, Sobol indices \\
 \bottomrule
 \end{tabularx}
 \end{table}

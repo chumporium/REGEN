@@ -44,8 +44,11 @@ class Shooter:
 
     # ------------------------------------------------------------------ waiting
     def pump(self, n=6):
+        from PySide6.QtCore import QEvent
         for _ in range(n):
             self.app.processEvents()
+            # without a running event loop, widgets replaced in tables (deleteLater) would stay on screen
+            self.app.sendPostedEvents(None, QEvent.DeferredDelete)
             time.sleep(0.01)
 
     def wait(self, tab, timeout=900):
@@ -235,9 +238,10 @@ def sec_guide(s):
 def sec_cases(s):
     from gui.cases_dialog import CasesDialog
     d = CasesDialog(s.w)
-    s.dialog(d, (820, 470))
+    s.dialog(d, (820, 720))                    # tall enough to show all 12 cases without scrolling
     d.list.setCurrentRow(0)
-    s.save(d, "case_studies.png", "First case (Extraction Optimization, Box-Behnken) selected.")
+    s.save(d, "case_studies.png", f"{d.list.count()} cases; first case (Extraction Optimization, Box-Behnken) "
+           "selected.")
     d.close()
 
 
@@ -579,9 +583,138 @@ def sec_diag_table(s):
     a.diag.tabs.setCurrentIndex(0)
 
 
+def _nsga_run(s, n, label):
+    n.run()
+    t = s.wait(n)
+    print(f"  NSGA ({label}): {t:.1f} s  {n.lbl_best.text().replace(chr(0x2192), '->')}", flush=True)
+    n.rtabs.setCurrentIndex(0)
+
+
+def _nsga_shot(s, n, kind, name, note=""):
+    n.rtabs.setCurrentIndex(0)
+    combo_select(n.cb_plot, kind)
+    s.save(s.w, name, (note + " " if note else "") + n.lbl_best.text())
+
+
+def _ann_all(s, label):
+    """ANN for every response with 'Optimize All Responses (One Click)', default search settings, 1 CPU core."""
+    w = s.w
+    at = w.ann_tab
+    w.go("ann")
+    at.sp_cpu.setValue(1)
+    at.ed_hidden.setText("5")
+    at.chk_use_after.setChecked(False)          # the RSM models stay selected; the ANNs are used for check D
+    at.search(True)
+    t = s.wait(at)
+    print(f"  ANN search, {label}: {t:.1f} s  {at.lbl_status.text()}", flush=True)
+    return at.lbl_status.text()
+
+
+def sec_moo(s):
+    """Multi-objective case studies: biodiesel (NSGA-III, 4 objectives), CNC turning (ANN, check D), concrete
+    (mixture front, desirability in the ternary region) and polygeneration plant (NSGA-III front, sensitivity)."""
+    from doe.project import (sample_biodiesel_project, sample_concrete_project, sample_polygeneration_project,
+                             sample_turning_project)
+    w = s.w
+    n = w.nsga_tab
+    split = n.rtabs.parentWidget()              # solutions table | graph: give the graphs more room here
+    old_sizes = split.sizes()
+    split.setSizes([430, 820])
+    defaults = ("Goals preset by the case (opt_criteria); population 100, max generations 300, seed 1, algorithm "
+                "Automatic, automatic stop 0.1 % within 20 generations, RSM models.")
+
+    # --- biodiesel: four objectives, NSGA-III
+    w.set_project(sample_biodiesel_project(), "nsga")
+    _nsga_run(s, n, "biodiesel")
+    for kind, name in (("front", "moo_biodiesel_matrix.png"), ("parallel", "moo_biodiesel_parallel.png"),
+                       ("convergence", "moo_biodiesel_convergence.png")):
+        _nsga_shot(s, n, kind, name, defaults)
+    s.notes.append(("moo_biodiesel_convergence.png (report)", text_of(n.txt_conv, 1500)))
+
+    # --- CNC turning: ANN for the three responses, then ANN vs RSM (check D)
+    w.set_project(sample_turning_project(), "ready")
+    status = _ann_all(s, "turning (3 responses)")
+    at = w.ann_tab
+    at.cb_resp.setCurrentIndex(0)                # Surface Roughness Ra
+    at.tabs.setCurrentWidget(at.tab_search)
+    s.save(w, "moo_turning_ann_search.png", f"Response Surface Roughness Ra; default search settings, 1 CPU core, "
+           f"seed 1. {status} " + text_of(at.srch_txt, 900))
+    w.go("nsga")
+    n.run_compare()
+    t = s.wait(n)
+    print(f"  NSGA ANN vs RSM (turning): {t:.1f} s", flush=True)
+    for kind, name in (("cmp_front", "moo_turning_compare_front.png"),
+                       ("cmp_cross", "moo_turning_compare_cross.png")):
+        n.rtabs.setCurrentIndex(0)
+        combo_select(n.cb_plot, kind)
+        s.save(w, name, defaults + " " + status)
+    n.rtabs.setCurrentWidget(n.txt_cmp)
+    s.save(w, "moo_turning_compare_report.png", text_of(n.txt_cmp, 2500))
+    n.rtabs.setCurrentIndex(0)
+
+    # --- concrete mixture: NSGA-III front, then the desirability contour in the ternary region
+    p = sample_concrete_project()
+    w.set_project(p, "optim")                    # visiting the Desirability page completes the preset criteria
+    o = w.optim_tab
+    o.run()
+    s.pump()
+    w.go("nsga")
+    _nsga_run(s, n, "concrete")
+    _nsga_shot(s, n, "front2d", "moo_concrete_front.png", "Pareto 2D: X Compressive Strength, Y Material Cost, "
+               "color CO2 Emission. " + defaults)
+    gt = w.graphs_tab
+    w.go("graphs")
+    combo_select(gt.cb_type, "desirability")
+    best = ", ".join(o.tbl_sol.item(0, c).text() for c in range(o.tbl_sol.columnCount())) if o.tbl_sol.rowCount() else ""
+    s.save(w, "moo_concrete_desirability.png", "Desirability criteria preset by the case, limits = data range, "
+           f"shape 1, importance 3. Best desirability solution: {best}. " + gt.note.text())
+
+    # --- polygeneration plant: ANN (for check D), NSGA-III, sensitivity from the TOPSIS choice
+    w.set_project(sample_polygeneration_project(), "ready")
+    _ann_all(s, "polygeneration (3 responses)")
+    w.go("nsga")
+    # with population 100 the run does not converge (check C: the ideal point keeps moving, even with 600
+    # generations); population 200 converges, so the worked example (Chapter 11) uses it
+    n.sp_pop.setValue(200)
+    _nsga_run(s, n, "polygeneration")
+    _nsga_shot(s, n, "matrix", "moo_polygen_front.png", defaults.replace("population 100", "population 200"))
+    n.sp_pop.setValue(100)
+    st = w.sens_tab
+    w.go("sens")
+    combo_select(st.cb_ref, "topsis")
+    st.cb_src.setCurrentIndex(0)                 # Selected model of each response (RSM here)
+    st.tabs.setCurrentIndex(0)
+    combo_select(st.cb_layout, "all")
+    st.sp_steps.setValue(11)
+    # five factors with three responses each need more room than the standard window: this shot is made with a
+    # larger window (2200 x 1300) so that the panels and their three vertical axes are readable
+    w.resize(2200, 1300)
+    s.pump()
+    st.run_parametric()
+    s.pump()
+    s.save(w.grab(), "moo_polygen_parametric.png", "Window 2200 x 1300. Reference: NSGA TOPSIS choice; model: "
+           "selected model (RSM); 11 points. " + text_of(st.txt_par, 2500))
+    w.resize(WIN_W, WIN_H)
+    s.pump()
+    st.tabs.setCurrentIndex(1)
+    combo_select(st.cb_gmethod, "src")
+    st.run_global()
+    s.save(w, "moo_polygen_src.png", f"Standardized coefficients, Latin hypercube {st.sp_n.value()} points. "
+           + text_of(st.txt_sob, 1500))
+    combo_select(st.cb_gmethod, "sobol")
+    st.run_global()
+    t = s.wait(st)
+    print(f"  Sobol (polygeneration): {t:.1f} s", flush=True)
+    s.save(w, "moo_polygen_sobol.png", f"Sobol indices, N = {st.sp_n.value()}. " + text_of(st.txt_sob, 2500))
+    st.tabs.setCurrentIndex(3)
+    st.run_front()
+    s.save(w, "moo_polygen_tradeoff.png", "Last NSGA-III result (polygeneration). " + text_of(st.txt_front, 1500))
+    split.setSizes(old_sizes)
+
+
 SECTIONS = [("start", sec_start), ("new_design", sec_new_design), ("guide", sec_guide), ("cases", sec_cases),
             ("import", sec_import), ("bbd", sec_bbd), ("factorial", sec_factorial), ("logistic", sec_logistic),
-            ("splitplot", sec_splitplot), ("mixture", sec_mixture), ("ann", sec_ann),
+            ("splitplot", sec_splitplot), ("mixture", sec_mixture), ("ann", sec_ann), ("moo", sec_moo),
             ("diag_table", sec_diag_table)]
 
 

@@ -9,6 +9,11 @@ This chapter goes through a complete study with two built-in case studies:
         ANN, desirability, NSGA-II, the checks C and D, sensitivity and prediction.
   \item \textbf{Part B, dye adsorption} (\ui{Dye Adsorption (ANN, 40 runs)}): 40 historical runs of a strongly nonlinear
         process with one response. It shows when an ANN is justified, with the checks A and B.
+  \item \textbf{Part C, polygeneration plant} (\ui{Polygeneration Plant (3 Objectives)}): 80 simulated runs of an
+        illustrative plant model with five decision variables and three conflicting objectives. It is a complete
+        multi-objective study: readiness, RSM and ANN with checks A and B, NSGA-III with checks C and D, sensitivity,
+        choice of the compromise, confirmation plan and export (Section~\ref{sec:ch11-polygen}). A short note on the
+        mixture variant (\ui{Concrete Mix Paste (Mixture, 3 Objectives)}) closes the part.
 \end{itemize}
 All numbers below are those of the screenshots of this manual: design seed 12345, ANN seed 1, NSGA seed 1, one CPU
 core. If you repeat the steps with the same settings you should see the same values; on a different computer the last
@@ -359,7 +364,7 @@ optimization results, comparisons and search results are stored in the \texttt{.
 \end{figure}
 
 % ======================================================================================================
-\section{Checklist for reporting the study}
+\section{Checklist for reporting the study (Part A)}
 \label{sec:ch11-checklist}
 \begin{table}[htbp]
 \centering
@@ -385,6 +390,298 @@ Check D & Failed: $\Delta=22.4$~\% (Yield), $dx=56$~\%; RSM retained, confirmati
 Sensitivity & Sobol $S_T$: Temperature 0.60 / 0.71, Time 0.36 / 0.17, Concentration 0.08 / 0.15 (Yield / Purity). \\
 Confirmation & PI (95~\%, $n=3$): Yield 76.9--79.7, Purity 91.7--93.2 at the optimum; Yield 72.1--75.8 at the ANN TOPSIS
 point. \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+% ======================================================================================================
+\section{Part C: multi-objective optimization of a polygeneration plant}
+\label{sec:ch11-polygen}
+Part C follows a complete multi-objective study. The case \ui{Polygeneration Plant (3 Objectives)} contains 80 runs of
+an illustrative thermodynamic and thermoeconomic model of a plant that uses geothermal heat to produce power (organic
+Rankine cycle), cooling (absorption chiller) and fresh water (reverse osmosis). The runs are simulated with a Latin
+hypercube and a small random noise; they are not measurements of a real plant, but they behave the way such a study
+does in practice: a plant model is evaluated at space-filling points, a surrogate model is fitted, and the surrogate
+is optimized. The five decision variables and the three objectives are:
+\begin{itemize}
+  \item A: Geothermal Temperature 160--220~°C; B: Turbine Inlet Pressure 1000--2000~kPa; C: Pinch Point 5--15~°C;
+        D: RO Recovery Ratio 0.35--0.75; E: Reinjection Temperature 50--90~°C;
+  \item Exergy Efficiency (\%, maximize), Product Cost (USD/GJ, minimize), Environmental Impact (mPts/h, minimize).
+\end{itemize}
+The goals are preset by the case. The settings are the defaults unless stated (ANN seed 1, NSGA seed 1, one CPU core).
+
+\subsection{Readiness}
+\ui{Data Readiness} (reference model Quadratic, 21 parameters) rates all three responses \ui{Ready}: modeling scores 92,
+92 and 92, optimization scores 91, 94 and 91. The structure is sound (80 complete runs, residual df 59, 79 to 80
+distinct levels per factor, maximum VIF 1.63, largest gap in the factor space 0.29), and there are no outliers. Two
+items need attention: there are no replicates (pure error df 0, \ui{Problem}), so the noise level and the lack of fit
+cannot be assessed, and six runs have high leverage. Without replicates the honest statement is that the surrogate
+reproduces the plant model, not that the noise is known; for a simulated data set this is acceptable.
+
+The readiness report also locates the model optimum of each response, and these already show the conflict: the
+highest Exergy Efficiency lies at A~=~219.6~°C, B~=~1901~kPa, C~=~5.1~°C, D~=~0.352, E~=~50.8~°C, the lowest Product
+Cost at A~=~218.8~°C, E~=~52.0~°C, but the lowest Environmental Impact at A~=~160.9~°C, B~=~1192~kPa, E~=~83.3~°C, at
+the other end of the temperature range.
+
+\subsection{Response surface models}
+On \ui{RSM Analysis}, \ui{Fit Summary} suggests the quadratic model for all three responses (Exergy Efficiency:
+adjusted $R^2$ 0.9947, predicted $R^2$ 0.9923; Product Cost: 0.9767 and 0.9672; Environmental Impact: 0.9924 and
+0.9901). The cubic model has a lower predicted $R^2$ for every response (0.9651, 0.9202 and 0.9453), a sign of
+overfitting. All five main effects are significant for Exergy Efficiency (model $F=743.5$) and Environmental Impact
+($F=516.5$); for Product Cost the linear term of the RO Recovery Ratio is not ($p=0.070$), although its quadratic term
+is part of the model. Among the interactions, Geothermal Temperature $\times$ Reinjection Temperature (AE) is significant
+for Exergy Efficiency and Geothermal Temperature $\times$ Turbine Inlet Pressure (AB) for Environmental Impact
+($p=0.0035$).
+
+\subsection{ANN with checks A and B}
+Even with excellent RSM models, the ANN checks are worth running, because check~D needs the networks. On \ui{ANN} the
+\ui{Data Adequacy} verdict is \ui{Adequate for ANN modeling} for all three responses. \ui{Optimize All Responses (One
+Click)} (check~A) selects:
+\begin{itemize}
+  \item Exergy Efficiency: 5-3-1 (22 weights), $Q^2=0.9904$; RSM on the same folds 0.9924;
+  \item Product Cost: 5-8-4-1 (89 weights), $Q^2=0.9548$; RSM 0.9623;
+  \item Environmental Impact: 5-4-1 (29 weights), $Q^2=0.9875$; RSM 0.9892.
+\end{itemize}
+All three networks are \ui{Good fit}, and each search ends with \ui{RSM predicts new data as well as or better than
+ANN (assessed on the same test data)}. The learning curves (check~B) agree: with the full data the ANN reaches a test
+$R^2$ of 0.984, 0.964 and 0.984 against 0.991, 0.970 and 0.989 for the RSM (\ui{RSM is more accurate at this data
+size}). For Exergy Efficiency and Product Cost the curve is still rising (\ui{More data would still help}), with a run
+estimate that the page itself marks as unreliable; for Environmental Impact \ui{The data is sufficient}.
+
+\textbf{Decision.} The RSM models stay selected. The response is smooth, the quadratic surface captures it, and the
+networks bring no gain. This is the opposite of the turning case of Chapter~\ref{chap:8}, and it is a normal outcome:
+an ANN is justified only when it predicts new data better.
+
+\subsection{NSGA-III and check C}
+On \ui{NSGA-II / III} the three goals are already set. The first run with all defaults (population 100, max
+generations 300) chooses NSGA-III with 91 reference points and runs all 300 generations. Check~C is not passed: the
+quick assessment reads \ui{Not enough generations yet: the mean hypervolume of the last 20 generations is still rising
+-0.203\% and the ideal point shifted 1.83\%.} (the hypervolume itself no longer rises; it is the ideal point, the best
+value of each objective, that still moves by more than 1~\%), and it adds that all 100 individuals are on the first
+front. Raising \ui{Max generations:} to 600 does not help: after 600 generations the ideal point still shifts by
+2.19~\%. \ui{Check Population Size} shows where the problem lies: two other seeds change the hypervolume by $+0.27$~\%
+and $+1.07$~\%, and a population of 200 adds 3.24~\% and converges after 145 generations, whereas all three runs with
+100 individuals use the full 300 generations. The verdict is \ui{Generations: not sufficient, increase the maximum
+generations.} and \ui{Population: not sufficient (the result changes by 1.1\% when the seed is changed; a 2x population
+increases the hypervolume by 3.2\%). Increase the population, for example to 200, then check again.} A population of
+100 is too small to hold the ends of this three-objective front with five decision variables, so the extremes of the
+front keep moving.
+
+With \ui{Population:} 200 (190 reference points) the run stops automatically at generation 145 with 197 Pareto
+solutions: \ui{Enough generations: the mean hypervolume of the last 20 generations changed by only +0.045\% compared
+with the previous 20 generations (limit 0.19\%) and the ideal point shifted 0.16\% (limit 1\%).} The result line is
+\ui{NSGA-III: 197 Pareto solutions, automatic stop at generation 145. Best compromise (TOPSIS): Geothermal Temperature =
+218.51, Turbine Inlet Pressure = 1401.3, Pinch Point = 10.665, RO Recovery Ratio = 0.74987, Reinjection Temperature =
+50.589 $\rightarrow$ Exergy Efficiency = 20.132, Product Cost = 18.194, Environmental Impact = 3.9337}.
+
+\ui{Check Population Size} for this run (Table~\ref{tab:ch11-poly-popcheck}) reports \ui{Generations: sufficient (the
+hypervolume has flattened).} but \ui{Population: not sufficient (the result changes by 1.2\% when the seed is changed; a
+2x population increases the hypervolume by 1.4\%). Increase the population, for example to 400, then check again.} Both
+values are only slightly above the 1~\% limit. A run with population 400 (378 reference points) stops at generation
+115 with 389 solutions, and its own population check is passed: \ui{Population: sufficient. Another seed changes the
+hypervolume by only 0.66\% and a 2x population adds only 0.98\%.}
+
+\begin{table}[htbp]
+\centering
+\small
+\caption{\ui{Adequacy Check Results} for the polygeneration case (NSGA-III, RSM models, seed 1) with population 200 and
+400.}
+\label{tab:ch11-poly-popcheck}
+\begin{tabular}{@{}lrrlrrrr@{}}
+\toprule
+Run & Pop. & Seed & Generations & Solutions & HV & Diff. & TOPSIS shift (\%) \\
+\midrule
+Current result & 200 & 1 & 145 (converged) & 197 & 58.90\% & +0.00\% & 0.0 \\
+Different seed & 200 & 102 & 300 & 196 & 58.79\% & $-0.19$\% & 13.5 \\
+Different seed 2 & 200 & 203 & 120 (converged) & 190 & 58.21\% & $-1.17$\% & 5.5 \\
+Population 2x & 400 & 1 & 115 (converged) & 389 & 59.73\% & +1.40\% & 13.7 \\
+\midrule
+Current result & 400 & 1 & 115 (converged) & 389 & 58.71\% & +0.00\% & 0.0 \\
+Different seed & 400 & 102 & 130 (converged) & 392 & 58.33\% & $-0.65$\% & 7.7 \\
+Different seed 2 & 400 & 203 & 110 (converged) & 391 & 58.44\% & $-0.46$\% & 5.4 \\
+Population 2x & 800 & 1 & 100 (converged) & 781 & 59.29\% & +0.99\% & 3.7 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+How much does this matter for the decision? The TOPSIS choice of the population-400 run is 216.04~°C, 1372.4~kPa,
+12.031~°C, 0.750, 50.002~°C with Exergy Efficiency 19.59~\%, Product Cost 18.00~USD/GJ and Environmental Impact
+3.848~mPts/h. Compared with the population-200 choice, only the Pinch Point moves noticeably (12.0 against 10.7~°C,
+13.7~\% of its range), and the objectives change by 0.54 percentage points of efficiency, 0.19~USD/GJ and
+0.085~mPts/h, small against the ranges of the front. The front is flat in the Pinch Point direction: a slightly larger
+pinch trades a little efficiency for a little cost and impact. The rest of this part uses the population-200 run,
+which is the one shown in the screenshots; with population 400 the conclusions are the same. In a report, state the
+population that passed check~C (400) and the run used for the figures.
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=\linewidth]{moo_polygen_front.png}
+\caption{NSGA-III front of the polygeneration case (population 200, 197 solutions), \ui{Objective matrix (each pair)}.
+Exergy Efficiency and Environmental Impact rise together (conflict), Exergy Efficiency and Product Cost improve
+together; the star is the TOPSIS choice.}
+\label{fig:ch11-poly-front}
+\end{figure}
+
+The objective matrix (Figure~\ref{fig:ch11-poly-front}) shows the shape of the front: Exergy Efficiency ranges from
+10.68 to 22.19~\%, Product Cost from 16.85 to 24.00~USD/GJ and Environmental Impact from 2.54 to 4.63~mPts/h.
+Efficiency and impact rise together along an almost straight band, while the cost falls as the efficiency rises.
+
+\subsection{Check D: ANN versus RSM}
+\ui{Compare ANN vs RSM} with the same settings (population 200, seed 1) gives the green verdict \ui{Both models agree:
+predictions on the front differ by only 3.0\% on average and the compromise choices are close together. The
+optimization result does not depend on the choice of model.} The details:
+\begin{itemize}
+  \item fronts of 197 (RSM, 145 generations) and 198 solutions (ANN, 100 generations); hypervolume 58.7~\% and
+        58.3~\% by the own model, 57.3~\% and 58.1~\% by the other model;
+  \item mean (maximum) prediction difference on the fronts: Exergy Efficiency 1.9~\% (7.2~\%), Product Cost 3.0~\%
+        (10.8~\%), Environmental Impact 1.6~\% (5.4~\%) of the data range;
+  \item TOPSIS choices: RSM front 218.51~°C, 1401.3~kPa, 10.665~°C, 0.7499, 50.589~°C (Exergy Efficiency 20.132 by RSM
+        and 20.151 by ANN, Product Cost 18.194 and 18.047, Environmental Impact 3.9337 and 3.9691); ANN front
+        216.24~°C, 1412.6~kPa, 12.063~°C, 0.7499, 50.011~°C (19.738 and 19.793, 17.929 and 17.852, 3.8768 and
+        3.9191). The distance is $dx=14.0$~\%, just inside the 15~\% limit, and it comes from the Pinch Point (10.7
+        against 12.1~°C): the front is flat in that direction;
+  \item accuracy on new data: RSM mean predicted $R^2$ 0.983, ANN mean cross-validation $Q^2$ 0.978.
+\end{itemize}
+Check~D is passed. Together with checks A and B it says that the result does not depend on the surrogate: two
+different model families, fitted to the same 80 runs, lead to the same trade-off and to compromise settings whose
+predicted objectives differ by less than 0.4~percentage points of efficiency.
+
+\subsection{Sensitivity and parametric study}
+On \ui{Sensitivity} choose \ui{Start from:} \ui{NSGA: TOPSIS choice} and \ui{Model:} \ui{Selected model of each
+response}. The results are discussed in Section~\ref{sec:ch09-polygen} of Chapter~\ref{chap:9}
+(Figures~\ref{fig:ch09-poly-param}--\ref{fig:ch09-poly-front}); in short:
+\begin{itemize}
+  \item the Geothermal Temperature sets the trade-off: it has the largest standardized coefficient for all three
+        objectives ($+0.727$, $-0.582$, $+0.844$) and the largest Sobol index for efficiency (0.465) and impact
+        (0.604), and it changes steadily along the front ($\rho=0.95$ with efficiency);
+  \item the Pinch Point is the second lever for the cost (Sobol $S_T=0.365$), the Turbine Inlet Pressure for the
+        impact (0.202);
+  \item Reinjection Temperature and RO Recovery Ratio stay near one of their bounds on most of the front (about
+        50~°C and 0.75): they can be fixed there;
+  \item the responses are almost additive (sum of $S_1$ at least 0.996).
+\end{itemize}
+\ui{Local Sensitivity (Tornado)} with $\pm10$~\% adds the view from the chosen point: the Exergy Efficiency (20.132)
+changes most with the Turbine Inlet Pressure (19.764 at 1301~kPa, 20.433 at 1501~kPa) and the Geothermal Temperature
+(19.623 at 212.5~°C, 20.258 at 220~°C), and the Product Cost (18.194) most with the Pinch Point (18.492 at 9.66~°C,
+17.957 at 11.66~°C). In the plant these are the variables to control most tightly around the chosen setting.
+
+\subsection{Choice of the compromise}
+The front offers a continuum of designs, and the choice depends on how much the environmental impact weighs against
+efficiency and cost. Two candidates are marked on the page:
+\begin{itemize}
+  \item TOPSIS (equal weights): 218.51~°C, 1401.3~kPa, 10.665~°C, 0.7499, 50.589~°C with Exergy Efficiency 20.13~\%,
+        Product Cost 18.19~USD/GJ and Environmental Impact 3.934~mPts/h;
+  \item knee point: 201.34~°C, 1424.3~kPa, 13.618~°C, 0.7475, 50.128~°C with Exergy Efficiency 18.20~\%, Product
+        Cost 18.45~USD/GJ and Environmental Impact 3.619~mPts/h.
+\end{itemize}
+Moving from the TOPSIS choice to the knee lowers the impact by 8~\% (3.934 to 3.619) and costs 1.93 percentage points
+of efficiency and 0.26~USD/GJ. Both lie in the interior of the front, away from its ends (efficiency 10.7 and
+22.2~\%), where the models are least supported by data. In this example the TOPSIS choice is taken as the design point,
+and the knee is kept as the low-impact alternative. Other preferences are expressed with the \ui{TOPSIS weight}
+column, or by a response limit, for example an \ui{Upper limit (constraint)} on the Environmental Impact.
+
+\subsection{Confirmation plan}
+\ui{Send Selected Solution to Prediction} (without a selection the TOPSIS solution is sent) gives the predictions with
+their intervals. Because the runs come from a deterministic plant model, ``confirmation'' here means one new evaluation
+of the plant model at the chosen point, so set \ui{Number of confirmation runs (n):} to 1. The 95~\% prediction
+intervals for a single run are then:
+\begin{itemize}
+  \item TOPSIS point: Exergy Efficiency 19.74--20.53~\%, Product Cost 17.61--18.78~USD/GJ, Environmental Impact
+        3.848--4.019~mPts/h;
+  \item knee point: 17.79--18.62~\%, 17.83--19.08~USD/GJ, 3.528--3.710~mPts/h.
+\end{itemize}
+With the default $n=3$ (for repeated measurements on a real plant or pilot unit) the intervals at the TOPSIS point are
+19.82--20.44~\%, 17.73--18.66~USD/GJ and 3.866--4.001~mPts/h. Evaluate the plant model at both points; if the values
+fall inside the intervals, the surrogate is confirmed where it matters. Because the data have no replicates, the
+residual variance behind these intervals contains the small lack of fit of the quadratic models as well as the noise,
+so they are, if anything, slightly conservative. If a value falls outside, add the evaluated point to the data, refit
+and repeat the optimization.
+
+\subsection{Export of the data}
+For a report or paper the following exports cover the study:
+\begin{itemize}
+  \item \ui{Export Pareto to Excel\dots} on the NSGA page: the 197 solutions with factor values, all responses and the
+        TOPSIS score (sheet \texttt{Pareto}), the settings and the stop reason (\texttt{Settings}), the convergence
+        history (\texttt{Convergence}) and, after check~D, the sheets \texttt{RSM Front}, \texttt{ANN Front} and
+        \texttt{ANN vs RSM};
+  \item the reports of check~C (\ui{Convergence \& Adequacy}) and check~D (\ui{ANN vs RSM}) with \ui{Export all
+        tables\dots};
+  \item the significance table, the Sobol tables, the tornado tables and the Spearman tables of the
+        \ui{Sensitivity} page with \ui{Export all tables\dots}, and the data behind every graph (for example the
+        parametric curves) with \ui{Export data\dots};
+  \item the ANOVA tables and fit summaries of the three RSM models, and the architecture search tables of the ANN
+        page;
+  \item the whole project with \menupath{File $\rightarrow$ Export to Excel\dots} and \menupath{File $\rightarrow$
+        PDF Report\dots}.
+\end{itemize}
+
+% ======================================================================================================
+\section{Part C, mixture variant: concrete mix paste}
+\label{sec:ch11-concrete}
+The case \ui{Concrete Mix Paste (Mixture, 3 Objectives)} shows the same workflow for a constrained mixture: cement
+(45--75~\%), fly ash (0--30~\%) and water (20--35~\%) of the paste, with the water/binder ratio limited to 0.35--0.60
+by two linear constraints, 14 runs of a D-optimal design and quadratic Scheff\'e models (predicted $R^2$ 0.993, 0.984
+and 0.997). Compressive Strength is maximized, Material Cost and CO2 Emission are minimized. Two things differ from a
+process study. First, the factors are not independent: NSGA-III works on the simplex and repairs every new blend so
+that the components sum to 100~\%, and the constraints are handled as violations
+(Section~\ref{sec:ch08-nsga} of Chapter~\ref{chap:8}). Second, the Sobol indices are not available for a pure mixture,
+because mixture components cannot vary one at a time; the trade-off is read from the front and the ternary graphs.
+
+With the defaults NSGA-III stops at generation 120 with 92 solutions (Figure~\ref{fig:ch11-concrete-front}). The front
+runs from 32.5 to 52.7~MPa, 84.9 to 99.8~USD/t and 425 to 661~kg/t of CO2. Up to 45.9~MPa the cement content stays at
+its minimum of 45--45.6~\%, and the strength is gained by replacing water with fly ash (fly ash 20 to 29~\%, water 35 to
+26~\%); the CO2 emission stays between 425 and 432~kg/t while the cost rises. Beyond that point more cement is the only
+way to more strength, and the CO2 jumps to 478~kg/t at 46.2~MPa and above 600~kg/t from about 48.5~MPa. The TOPSIS
+choice sits exactly at this step:
+cement 45.0~\%, fly ash 29.0~\%, water 26.0~\% with 45.89~MPa, 94.27~USD/t and 428.4~kg/t. The desirability
+optimization with the preset goals (limits = data range) finds a neighbouring blend, cement 45~\%, fly ash 27.8~\%,
+water 27.2~\% ($D=0.626$), shown in the ternary desirability contour (Figure~\ref{fig:ch11-concrete-desir}).
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=\linewidth]{moo_concrete_front.png}
+\caption{NSGA-III front of the concrete mix paste, \ui{Pareto 2D (choose axes)}: Compressive Strength against Material
+Cost, colored by CO2 Emission. Beyond about 46~MPa the emission jumps (yellow points).}
+\label{fig:ch11-concrete-front}
+\end{figure}
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=\linewidth]{moo_concrete_desirability.png}
+\caption{\ui{Desirability Contour} of the concrete mix paste in the constrained ternary region (pseudo-components,
+zoomed to the feasible band between the two water/binder constraints); the star marks the best desirability blend.}
+\label{fig:ch11-concrete-desir}
+\end{figure}
+
+% ======================================================================================================
+\section{Checklist for the multi-objective study}
+\label{sec:ch11-checklist-moo}
+\begin{table}[htbp]
+\centering
+\small
+\caption{What to report, with the values of the polygeneration example (Part C).}
+\label{tab:ch11-checklist-moo}
+\begin{tabularx}{\linewidth}{@{}>{\raggedright\arraybackslash}p{2.6cm} >{\raggedright\arraybackslash}X@{}}
+\toprule
+Item & Polygeneration plant example \\
+\midrule
+Data & 80 simulated runs (Latin hypercube) of an illustrative plant model, 5 decision variables; readiness \ui{Ready}
+(modeling 92/92/92, optimization 91/94/91); no replicates. \\
+Models & Quadratic RSM, predicted $R^2$ 0.992, 0.967, 0.990 (efficiency, cost, impact). \\
+Check A & ANN 5-3-1, 5-8-4-1, 5-4-1; $Q^2$ 0.990, 0.955, 0.988 against RSM 0.992, 0.962, 0.989 on the same folds;
+RSM kept. \\
+Check B & ANN test $R^2$ 0.984, 0.964, 0.984 against RSM 0.991, 0.970, 0.989 with the full data. \\
+NSGA & NSGA-III, population 200 (100 did not converge), seed 1, automatic stop at generation 145, 197 solutions. \\
+Check C & Population 100: not converged after 300 (or 600) generations. Population 200: converged at generation 145
+(gain +0.045~\% $<$ 0.19~\%, ideal point shift 0.16~\%), population check slightly above the limits (1.2~\%, 1.4~\%).
+Population 400: converged at 115, population check passed (0.66~\%, 0.98~\%); TOPSIS objectives within 0.54 points of
+efficiency of the population-200 choice. \\
+Check D & Passed: $\Delta=3.0$~\% (cost), $dx=14.0$~\%. \\
+Sensitivity & Geothermal Temperature dominant ($\beta$ $+0.73$/$-0.58$/$+0.84$; Sobol $S_T$ 0.47/0.36/0.60); sum of
+$S_1\ge0.996$. \\
+Compromise & TOPSIS 218.5~°C, 1401~kPa, 10.7~°C, 0.750, 50.6~°C: 20.13~\%, 18.19~USD/GJ, 3.934~mPts/h; knee as
+low-impact alternative. \\
+Confirmation & One plant-model evaluation; PI (95~\%, $n=1$) 19.74--20.53~\%, 17.61--18.78~USD/GJ, 3.848--4.019~mPts/h. \\
 \bottomrule
 \end{tabularx}
 \end{table}

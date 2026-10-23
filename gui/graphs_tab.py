@@ -244,7 +244,12 @@ class GraphsTab(QWidget):
                 continue
             fit = p.model(j)
             if fit is not None:
-                out.append({**c, "fit": fit, "index": j})
+                # limits not set yet (e.g. goals preset in a case study): the observed range, as on the
+                # Desirability page
+                y = p.data[:, j] / ((p.responses[j].trials or 1) if p.response_family(j) == "binomial" else 1)
+                lo, hi = (float(np.nanmin(y)), float(np.nanmax(y))) if np.any(np.isfinite(y)) else (0.0, 1.0)
+                full = {"low": lo, "high": hi, "target": (lo + hi) / 2, "importance": 3, "shape": 1.0, **c}
+                out.append({**full, "fit": fit, "index": j})
         return out
 
     def draw(self):

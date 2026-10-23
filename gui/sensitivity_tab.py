@@ -4,7 +4,7 @@ import html
 import numpy as np
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (QComboBox, QDoubleSpinBox, QFormLayout, QGroupBox, QHBoxLayout, QHeaderView, QLabel,
-                               QMessageBox, QPushButton, QSpinBox, QSplitter, QTableWidget, QTableWidgetItem,
+                               QMessageBox, QPushButton, QScrollArea, QSpinBox, QSplitter, QTableWidget, QTableWidgetItem,
                                QTabWidget, QVBoxLayout, QWidget)
 
 from doe import constraints as cons_mod
@@ -81,7 +81,7 @@ class SensitivityTab(QWidget):
         self.cb_ref.currentIndexChanged.connect(self.load_reference)
 
     # ------------------------------------------------------------------ layout helpers
-    def _study(self, title, controls, run_text, slot):
+    def _study(self, title, controls, run_text, slot, scroll=False):
         w = QWidget()
         v = QVBoxLayout(w)
         bar = QHBoxLayout()
@@ -98,7 +98,13 @@ class SensitivityTab(QWidget):
         sp = QSplitter(Qt.Vertical)
         canvas = MplCanvas(figsize=(7, 4))
         txt = ReportBrowser()
-        sp.addWidget(canvas)
+        if scroll:                                  # tall figures (many panels) scroll instead of shrinking
+            area = QScrollArea()
+            area.setWidgetResizable(True)
+            area.setWidget(canvas)
+            sp.addWidget(area)
+        else:
+            sp.addWidget(canvas)
         sp.addWidget(txt)
         sp.setSizes([520, 260])
         v.addWidget(sp)
@@ -130,7 +136,7 @@ class SensitivityTab(QWidget):
             "Parametric Study",
             [("Layout:", self.cb_layout), ("Vary:", self.cb_px), ("from", self.sp_from), ("to", self.sp_to),
              ("points", self.sp_steps), ("Curves for:", self.cb_pz), ("values", self.sp_nz)], "Run",
-            self.run_parametric)
+            self.run_parametric, scroll=True)
         self.cb_px.currentIndexChanged.connect(self._range_of_x)
         self.cb_layout.currentIndexChanged.connect(self._layout_changed)
         self._layout_changed()
@@ -367,6 +373,7 @@ class SensitivityTab(QWidget):
 
     def draw_parametric(self, res, z0):
         p = self.project
+        self.can_par.setMinimumSize(0, 0)
         fig = self.can_par.figure
         fig.clear()
         js = list(res["Y"])
@@ -417,6 +424,10 @@ class SensitivityTab(QWidget):
         n = len(results)
         ncol = min(2, n)
         nrow = int(np.ceil(n / ncol))
+        n_resp = max(len(r["Y"]) for r in results)
+        # every panel keeps a readable size; the page scrolls when the figure is larger than the window
+        self.can_par.setMinimumHeight(300 * nrow if nrow > 1 or n_resp > 2 else 0)
+        self.can_par.setMinimumWidth((560 + 70 * (n_resp - 2)) * ncol if n_resp > 2 else 0)
         axs = np.atleast_1d(fig.subplots(nrow, ncol, squeeze=False)).ravel()
         for ax in axs[n:]:
             ax.axis("off")
@@ -586,7 +597,8 @@ class SensitivityTab(QWidget):
                 v, ci = r[key], r[key + "_ci"]
                 ax.bar(x + (k - 0.5) * 0.38, v, 0.38, color=col, label=lab,
                        yerr=[np.maximum(v - ci[:, 0], 0), np.maximum(ci[:, 1] - v, 0)], capsize=3)
-            ax.set_xticks(x, names)
+            many = len(idx) > 3
+            ax.set_xticks(x, names, rotation=30 if many else 0, ha="right" if many else "center")
             ax.set_ylim(min(0, ax.get_ylim()[0]), max(1.0, ax.get_ylim()[1]))
             ax.set_ylabel("Sobol index")
             ax.set_title(p.response_label(j))
@@ -704,7 +716,8 @@ class SensitivityTab(QWidget):
         ax = axs[0]
         if n_f:
             im = ax.imshow(res["rho"], cmap="bwr", vmin=-1, vmax=1, aspect="auto")
-            ax.set_xticks(range(len(objs)), onames, rotation=30 if len(objs) > 3 else 0)
+            rot = len(objs) > 2 or max(len(nm) for nm in onames) > 12
+            ax.set_xticks(range(len(objs)), onames, rotation=30 if rot else 0, ha="right" if rot else "center")
             ax.set_yticks(range(n_f), fnames)
             for a in range(n_f):
                 for b in range(len(objs)):

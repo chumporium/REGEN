@@ -1527,9 +1527,15 @@ def nsga_convergence(res):
                      f"{100 * stop_tol_eff(last, tol):.2f}%) and the ideal point shifted {100 * last['shift']:.2f}% "
                      "(limit 1%).")
     else:
-        notes.append(f"Not enough generations yet: the mean hypervolume of the last {w} generations is still rising "
-                     f"{100 * last['gain']:+.3f}% and the ideal point shifted {100 * last['shift']:.2f}%. Increase "
-                     "the maximum generations (automatic stop still ends the run once it converges).")
+        lim = stop_tol_eff(last, tol)
+        why = []
+        if last["gain"] >= lim:
+            why.append(f"the mean hypervolume of the last {w} generations changed by {100 * last['gain']:+.3f}% "
+                       f"(limit {100 * lim:.2f}%)")
+        if last["shift"] >= 0.01:
+            why.append(f"the ideal point still shifted {100 * last['shift']:.2f}% (limit 1%)")
+        notes.append("Not enough generations yet: " + " and ".join(why) + ". Increase the maximum generations "
+                     "(automatic stop still ends the run once it converges).")
     sat = n_front >= pop
     if sat and m >= 3:
         notes.append(f"All {pop} individuals are already on the first front. For {m} objectives this population may "

@@ -866,3 +866,233 @@ depend on the model type. The prediction differences are measured on the Pareto 
 edges of the design region where models are least reliable. For POE objectives the range $R_o$ is that of the
 predictions, not of data. Finally, both NSGA runs use the same seed, so the comparison is reproducible but reflects one
 realization of each front; check~C applies to each of them.
+
+% ======================================================================================================
+\section{Multi-objective examples}
+\label{sec:ch08-moo-examples}
+The BBD extraction case above has only two objectives and a model that is clearly adequate. Two of the
+multi-objective case studies of Chapter~\ref{chap:2} show what changes with more objectives and with a response that a
+quadratic model cannot describe. Both use simulated, illustrative data. Their goals are preset, so the
+\ui{NSGA-II / III} page is ready to run when the case is opened; all settings below are the defaults (population 100,
+max generations 300, $p_c=0.9$, $\eta_c=15$, $\eta_m=20$, seed 1, \ui{Automatic}, automatic stop 0.1~\% within 20
+generations) unless stated otherwise.
+
+% ------------------------------------------------------------------------------------------------------
+\subsection{Biodiesel production: four objectives with NSGA-III}
+\label{sec:ch08-biodiesel}
+Case \ui{Biodiesel Production (4 Objectives)}: a face-centered CCD with 30 runs in Temperature (45--65~°C), Catalyst
+(0.5--1.5~wt\%), Methanol:Oil Ratio (4--10~mol/mol) and Reaction Time (30--90~min). Yield (\%) is maximized; Energy Use
+(kWh/kg), Production Cost (USD/kg) and Soap Formation (\%) are minimized. The quadratic models are very good (predicted
+$R^2$ 0.985, 0.988, 0.994 and 0.975), so the RSM models are used throughout.
+
+\paragraph{The run.} With four objectives the automatic choice is NSGA-III with $R=84$ reference points
+(Eq.~\eqref{eq:ch08-refs} with $H=6$; $H=7$ would give 120, more than the population of 100). The result line reads
+\ui{NSGA-III: 99 Pareto solutions, automatic stop at generation 95. Best compromise (TOPSIS): Temperature = 45, Catalyst
+= 0.6072, Methanol:Oil Ratio = 5.7982, Reaction Time = 30.014 $\rightarrow$ Yield = 78.813, Energy Use = 0.78486,
+Production Cost = 0.69811, Soap Formation = 0.74069}. On the front Yield ranges from 74.69 to 96.09~\%, Energy Use from
+0.733 to 1.349~kWh/kg, Production Cost from 0.664 to 0.991~USD/kg and Soap Formation from 0.688 to 1.927~\%.
+
+With four objectives the \ui{Pareto front (2D / 3D / matrix)} graph shows the objective matrix
+(Figure~\ref{fig:ch08-bio-matrix}). Every panel in the Yield row rises from left to right: higher Yield always comes with
+more energy, higher cost and more soap. The rank correlations between Yield and the other three objectives on the front
+are 0.80 (Energy Use), 0.90 (Production Cost) and 0.86 (Soap Formation), so Yield conflicts with all of them, while the
+three minimized objectives mostly agree with each other.
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=\linewidth]{moo_biodiesel_matrix.png}
+\caption{NSGA-III front of the biodiesel case (four objectives, 99 solutions): objective matrix with the TOPSIS choice
+(star). Yield rises together with Energy Use, Production Cost and Soap Formation.}
+\label{fig:ch08-bio-matrix}
+\end{figure}
+
+\paragraph{Parallel coordinates.} The parallel coordinates graph (Figure~\ref{fig:ch08-bio-parallel}) is the most
+readable view for four objectives. The objective axes (grey) are scaled so that the top is better; most lines cross
+between Yield and Energy Use, which is the visual sign of the conflict. The TOPSIS line runs along the bottom of the
+factor axes for Temperature, Catalyst and Reaction Time: the compromise uses the mildest conditions and accepts a Yield
+of 78.8~\%. The solution with the highest Yield (96.09~\%) needs 61.4~°C, 1.31~wt\%, a ratio of 9.86 and 81.8~min, and
+pays with Energy Use 1.349, Production Cost 0.991 and Soap Formation 1.927, the worst values on the front.
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=\linewidth]{moo_biodiesel_parallel.png}
+\caption{\ui{Parallel coordinates} of the biodiesel front. Factors over their full range, objectives on a grey
+background (top = better). The yellow line is the TOPSIS choice at low Temperature, Catalyst and Reaction Time.}
+\label{fig:ch08-bio-parallel}
+\end{figure}
+
+\paragraph{TOPSIS with four objectives.} With equal weights, three of the four objectives are best at mild conditions,
+so the compromise lies near the low-Yield end of the front. This is the arithmetic of TOPSIS, not a property of the
+process: the weights express priorities, and they should be set deliberately. Raising the \ui{TOPSIS weight} of Yield to
+3 moves the choice to 45.2~°C, 0.901~wt\%, 6.43 and 47.1~min (Yield 85.81~\%, Energy Use 0.874, Production Cost 0.757,
+Soap Formation 0.983), which is also the knee point of the front; a weight of 5 gives 45.0~°C, 0.895~wt\%, 9.01 and
+78.9~min (Yield 89.28~\%, Energy Use 1.067, Production Cost 0.854, Soap Formation 1.029). The weights are applied when
+the run ends, so click \ui{Run Optimization} again after changing them; with the same seed the front is identical and
+only the marked compromise moves.
+
+\paragraph{Check C with the Monte Carlo hypervolume.} For four objectives the hypervolume is estimated with the 8000
+fixed Monte Carlo points of Eq.~\eqref{eq:ch08-hvmc}, so it fluctuates from generation to generation even when the front
+no longer advances. The convergence graph (Figure~\ref{fig:ch08-bio-conv}) shows the hypervolume rising to about 55~\% of
+$1.1^4$ within 40 generations and then moving up and down by about one percentage point. Because of this noise the
+effective threshold \eqref{eq:ch08-tau} rises from the 0.10~\% tolerance to 0.66~\%. The criterion is first met at
+generation 75 and holds until generation 95, where the run stops. The report states \ui{Enough generations: the mean
+hypervolume of the last 20 generations changed by only +0.099\% compared with the previous 20 generations (limit
+0.66\%) and the ideal point shifted 0.87\% (limit 1\%).}, and it adds \ui{All 100 individuals are already on the first
+front. For 4 objectives this population may not be large enough to describe the whole front; try 2x the population and
+compare (Check Population Size button).}
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=\linewidth]{moo_biodiesel_convergence.png}
+\caption{Convergence of the biodiesel run: the Monte Carlo hypervolume flattens near 55~\%; the criterion is first met
+at generation 75 (green dotted line) and the run stops at generation 95 (red line).}
+\label{fig:ch08-bio-conv}
+\end{figure}
+
+\ui{Check Population Size} confirms the warning (Table~\ref{tab:ch08-bio-popcheck}). Two other seeds change the
+hypervolume by $-0.27$~\% and $+0.91$~\%, but a population of 200 adds 3.89~\%: \ui{Population: not sufficient (a 2x
+population increases the hypervolume by 3.9\%). Increase the population, for example to 200, then check again.}
+
+\begin{table}[htbp]
+\centering
+\small
+\caption{\ui{Adequacy Check Results} for the biodiesel run (NSGA-III, population 100, seed 1) and for the repeat with
+population 200.}
+\label{tab:ch08-bio-popcheck}
+\begin{tabular}{@{}lrrlrrrr@{}}
+\toprule
+Run & Pop. & Seed & Generations & Solutions & HV & Diff. & TOPSIS shift (\%) \\
+\midrule
+Current result & 100 & 1 & 95 (converged) & 99 & 54.96\% & +0.00\% & 0.0 \\
+Different seed & 100 & 102 & 240 (converged) & 96 & 54.81\% & $-0.27$\% & 5.2 \\
+Different seed 2 & 100 & 203 & 120 (converged) & 97 & 55.46\% & +0.91\% & 11.1 \\
+Population 2x & 200 & 1 & 300 & 194 & 57.10\% & +3.89\% & 12.4 \\
+\midrule
+Current result & 200 & 1 & 300 & 194 & 55.46\% & +0.00\% & 0.0 \\
+Different seed & 200 & 102 & 175 (converged) & 193 & 55.83\% & +0.67\% & 8.2 \\
+Different seed 2 & 200 & 203 & 300 & 196 & 55.77\% & +0.56\% & 4.4 \\
+Population 2x & 400 & 1 & 145 (converged) & 389 & 57.51\% & +3.70\% & 7.2 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Following the advice, the run was repeated with \ui{Population:} 200 (165 reference points). It runs all 300
+generations: the criterion is first met at generation 60 but does not hold for 20 generations in a row, although the
+final assessment again reads \ui{Enough generations} (change $-0.026$~\%, limit 0.28~\%, ideal point shift 0.84~\%).
+The population check of this run (lower half of Table~\ref{tab:ch08-bio-popcheck}) is again not passed: a population of
+400 adds 3.70~\%. With four objectives the front is a three-dimensional surface, and each doubling of the population
+fills it more densely, so the Monte Carlo hypervolume of a finite population keeps growing. What matters for the
+decision is the compromise, and it is stable: with population 200 the TOPSIS choice is 45.1~°C, 0.632~wt\%, 5.05 and
+30.0~min (Yield 78.37~\%, Energy Use 0.765, Production Cost 0.689, Soap Formation 0.753), close to the result with 100,
+and it moves by at most 12.4~\% of a factor range over all eight runs. Report such a case honestly: the front
+is converged in the sense of check~C (no further progress with more generations), the population check is not passed,
+and the compromise is insensitive to the population.
+
+\paragraph{Prediction.} Sent to the \ui{Prediction \& Confirmation} page (95~\%, $n=3$), the TOPSIS solution of the
+population-100 run has the prediction intervals Yield 77.97--79.66~\%, Energy Use 0.760--0.810~kWh/kg, Production Cost
+0.690--0.707~USD/kg and Soap Formation 0.644--0.837~\%. Three confirmation runs at this setting check all four models
+at once.
+
+% ------------------------------------------------------------------------------------------------------
+\subsection{CNC turning: when the ANN is the more trustworthy model}
+\label{sec:ch08-turning}
+Case \ui{CNC Turning (ANN, 3 Objectives)}: 60 historical runs (Latin hypercube) with the factors Cutting Speed
+(80--240~m/min), Feed (0.05--0.30~mm/rev), Depth of Cut (0.5--2.5~mm) and Nose Radius (0.4--1.2~mm). Surface Roughness
+Ra (\textmu m) and Tool Wear (mm) are minimized, Material Removal Rate (cm\textsuperscript{3}/min) is maximized. The
+roughness has a peak at low cutting speeds (built-up edge, near 110~m/min) on top of the geometric dependence on feed
+and nose radius, which a quadratic surface cannot follow.
+
+\paragraph{Models.} The quadratic RSM model fits Material Removal Rate and Tool Wear very well (predicted $R^2$ 0.980
+and 0.991) but not Ra: $R^2=0.911$, predicted $R^2=0.747$. The \ui{Data Readiness} page rates Ra \ui{Fair - some things
+need fixing} (modeling score 82): two outliers, residuals that grow with the prediction, and a Box-Cox $\lambda=-0.15$
+(interval $-0.35$ to 0.05) that suggests a ln transform. \ui{Optimize All Responses (One Click)} on the ANN page
+(default search settings, one CPU core, seed 1) selects one network per response (check~A):
+\begin{itemize}
+  \item Ra: 4-1-1 (7 weights), cross-validation $Q^2=0.810$, \ui{Good fit}; the RSM reaches $Q^2=0.698$ on the same
+        five folds, and the report states \ui{ANN predicts new data better than RSM (assessed on the same test data)}.
+        Eight larger networks were excluded as overfitting (Figure~\ref{fig:ch08-turning-search}).
+  \item Material Removal Rate: 4-4-1 (25 weights), $Q^2=0.985$ (RSM 0.978).
+  \item Tool Wear: 4-4-2-5-1 (51 weights), $Q^2=0.996$ (RSM 0.991); a six-layer network had a slightly lower test
+        error, but within one standard error, so the simpler network was kept.
+\end{itemize}
+The learning curve of the Ra network (check~B) ends with \ui{The data is sufficient}: with the full training data the
+ANN reaches a test $R^2$ of 0.937 against 0.908 for the RSM on the same 12 test runs (\ui{ANN is more accurate at this
+data size}).
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=\linewidth]{moo_turning_ann_search.png}
+\caption{Architecture search for Surface Roughness Ra (CNC turning case, 60 runs, 5-fold cross-validation): the
+4-1-1 network is selected with $Q^2=0.810$; the RSM line (dotted) lies at 0.698.}
+\label{fig:ch08-turning-search}
+\end{figure}
+
+\paragraph{Check D.} \ui{Compare ANN vs RSM} runs NSGA-III twice. The RSM front has 99 solutions (105 generations), the
+ANN front 98 (110 generations); see Figures~\ref{fig:ch08-turning-front} and \ref{fig:ch08-turning-report}. The
+report gives:
+\begin{itemize}
+  \item Model quality: RSM predicted $R^2$ 0.7474, 0.9798 and 0.9914; ANN cross-validation $Q^2$ 0.8098, 0.9854 and
+        0.9958 (Ra, Material Removal Rate, Tool Wear).
+  \item Hypervolume: 66.7~\% for both fronts by their own model; 65.5~\% for the RSM front assessed by the ANN and
+        66.5~\% for the ANN front assessed by the RSM.
+  \item Prediction difference on the front: Ra 9.1~\% of its data range on average (maximum 51.6~\%), Material
+        Removal Rate 2.8~\% (16.6~\%), Tool Wear 6.1~\% (26.7~\%).
+  \item TOPSIS choices: RSM front 113.82~m/min, 0.19594~mm/rev, 2.4986~mm, 1.1837~mm with Ra 0.960 by RSM but 1.609 by
+        ANN; ANN front 127.31~m/min, 0.17577~mm/rev, 2.4806~mm, 1.1912~mm with Ra 1.193 by ANN and 0.605 by RSM. The
+        distance is $dx=8.4$~\%.
+\end{itemize}
+The verdict is amber: \ui{The models agree only partly. The largest mean difference of the predictions on the front is
+9.1\%, above the 5\% limit, while the compromise choices are 8\% of the factor range apart, within the 15\% limit.
+Check the region where the differences are largest before relying on the front there.} The last bullet compares the
+accuracy on new data: RSM mean predicted $R^2$ 0.906 against ANN mean cross-validation $Q^2$ 0.930.
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=\linewidth]{moo_turning_compare_front.png}
+\caption{\ui{ANN vs RSM: 2D front} of the turning case (Ra against Material Removal Rate). The RSM front (blue) reaches
+negative roughness values and removal rates far above the data; the ANN front (orange) stays within the range of the
+data for Ra.}
+\label{fig:ch08-turning-front}
+\end{figure}
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=\linewidth]{moo_turning_compare_report.png}
+\caption{\ui{ANN vs RSM} report of the turning case (upper part): model quality per response and front size.}
+\label{fig:ch08-turning-report}
+\end{figure}
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=\linewidth]{moo_turning_compare_cross.png}
+\caption{\ui{ANN vs RSM: cross-prediction} of the turning case. Material Removal Rate (2.8~\%) and Tool Wear (6.1~\%)
+lie close to the 1:1 line; for Ra (9.1~\%) the RSM predicts up to 12~\textmu m where the ANN predicts about 6.}
+\label{fig:ch08-turning-cross}
+\end{figure}
+
+\paragraph{Where the RSM front goes wrong.} The cross-prediction (Figure~\ref{fig:ch08-turning-cross}) locates the
+disagreement: Material Removal Rate and Tool Wear lie on the 1:1 line, but for Ra the two models part ways above about
+4~\textmu m, where the RSM predicts up to 12~\textmu m and the ANN about 6. Figure~\ref{fig:ch08-turning-front} shows the
+other end of the front.
+The RSM front predicts Ra from $-0.19$ to 12.1~\textmu m; 5 of its 99 solutions have a \emph{negative} roughness,
+which is physically impossible, and the lowest measured Ra is 0.33~\textmu m. The solution with the lowest RSM Ra
+(81.3~m/min, 0.0502~mm/rev, 2.50~mm, 0.958~mm) is predicted at $-0.19$ by the RSM and at 0.68 by the ANN. The
+RSM front also promises removal rates up to 165~cm\textsuperscript{3}/min, far above the highest value in the data
+(113.9): the quadratic surface extrapolates beyond the data. The ANN front stays within
+0.38--4.9~\textmu m for Ra and has no negative values, although it too promises removal rates up to
+148~cm\textsuperscript{3}/min, above the data: at the high-removal end of the front neither model is supported by
+runs. The hypervolumes hardly differ (66.7~\% for both) because the
+normalization is dominated by the ranges of all three objectives, so a large error in one objective at the ends of the
+front changes the hypervolume little; the prediction difference and the physical plausibility of the values are the
+more telling signs here.
+
+\paragraph{Decision.} Three independent results point to the ANN for Ra: its cross-validated $Q^2$ (0.810 against
+0.698 on the same folds), the learning curve (0.937 against 0.908), and the plausibility of its front. For Material
+Removal Rate and Tool Wear both models are accurate. The ANN is therefore selected for Ra (check box \ui{Use this
+response's ANN for graphs, optimization, NSGA-II \& prediction}), and the compromise is taken from the ANN front.
+Because the verdict of check~D is amber, confirmation runs should be made at the chosen setting, and the ends of the
+front (the lowest roughness and the highest removal rates) should not be used without new data.
+The ln transform suggested by the readiness page is the RSM alternative: it prevents negative predictions and raises
+the predicted $R^2$ of Ra to 0.933 (on the ln scale), but on the original scale the RSM still reaches only $Q^2=0.703$ on
+the folds of the architecture search, against 0.810 for the ANN. A transform cannot create the built-up-edge peak that
+the quadratic form lacks.

@@ -1,5 +1,7 @@
 """NSGA-II / NSGA-III tab: multi-objective optimization, Pareto front, compromise solution selection (TOPSIS / knee),
 convergence monitoring (hypervolume, automatic stop), population adequacy check, and ANN vs RSM front comparison."""
+import textwrap
+
 import numpy as np
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QBrush, QColor
@@ -120,10 +122,11 @@ def draw_pareto(fig, project, res, highlight=None, kind="front", opts=None):
                         ax.scatter(Y[highlight, b], Y[highlight, a], s=90, facecolor="none", edgecolor="#b42318",
                                    lw=1.5, zorder=6)
                 ax.tick_params(labelsize=6)
+                fs, wrap = (8, 18) if m < 4 else (6.5, 14)  # many panels: smaller, wrapped labels
                 if a == m - 1:
-                    ax.set_xlabel(_axis_label(project, res, b), fontsize=8)
+                    ax.set_xlabel(textwrap.fill(_axis_label(project, res, b), wrap), fontsize=fs)
                 if b == 0:
-                    ax.set_ylabel(_axis_label(project, res, a), fontsize=8)
+                    ax.set_ylabel(textwrap.fill(_axis_label(project, res, a), wrap), fontsize=fs)
         fig.suptitle(_title(res, ": every pair of objectives (star = TOPSIS choice)"), fontsize=10)
     else:
         _draw_parallel(fig, project, res, highlight)
@@ -282,8 +285,8 @@ def _draw_parallel(fig, project, res, highlight):
     ax.set_xticklabels(labels, fontsize=8)
     ax.set_yticks([])
     ax.set_ylim(-0.15, 1.12)
-    ax.set_title("Factors: full design range. Objectives (gray background): top = better.", fontsize=9)
-    ax.legend(loc="upper right", fontsize=8)
+    ax.set_title("Factors: full design range. Objectives (gray background): top = better.", fontsize=9, pad=24)
+    ax.legend(loc="lower right", bbox_to_anchor=(1.0, 1.06), ncol=2, fontsize=8, frameon=False)
 
 
 # ================================================================ ANN vs RSM comparison

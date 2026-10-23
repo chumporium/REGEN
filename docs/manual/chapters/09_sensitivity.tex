@@ -487,6 +487,135 @@ $-0.12$ at 70.7, $-0.25$ at 74.4) and becomes strongly negative at the high-Yiel
 increasingly more Purity.
 
 % ======================================================================================================
+\section{Example: polygeneration plant}
+\label{sec:ch09-polygen}
+The BBD example has three factors and two responses. The case \ui{Polygeneration Plant (3 Objectives)} (80 simulated
+runs of an illustrative plant model, Chapter~\ref{chap:11}) has five decision variables and three objectives, which is
+where the sensitivity page becomes indispensable. The models are the quadratic RSM models (predicted $R^2$ 0.992, 0.967
+and 0.990), \ui{Model:} is \ui{Selected model of each response}, and the reference point is \ui{NSGA: TOPSIS choice} of the
+NSGA-III run with population 200 (Section~\ref{sec:ch11-polygen}): Geothermal Temperature 218.51~°C, Turbine Inlet
+Pressure 1401.3~kPa, Pinch Point 10.665~°C, RO Recovery Ratio 0.7499 and Reinjection Temperature 50.589~°C.
+
+\paragraph{Parametric study.} Figure~\ref{fig:ch09-poly-param} shows the layout \ui{All factors, one panel each} with
+11 points. Every panel keeps a readable size; when the figure is larger than the window, the plot area scrolls. Each
+panel answers the question ``what happens if only this variable moves away
+from the compromise?'':
+\begin{itemize}
+  \item (a) Geothermal Temperature is the main lever of the conflict: from 160 to 220~°C the Exergy Efficiency rises
+        from 15.10 to 20.26~\% and the Product Cost falls from 21.22 to 18.12~USD/GJ, but the Environmental Impact rises
+        from 2.94 to 3.96~mPts/h.
+  \item (b) Turbine Inlet Pressure raises the efficiency up to a flat maximum (20.96~\% at 1900~kPa) and lowers the
+        cost, again at the price of a higher impact (3.68 to 4.36~mPts/h from 1000 to 2000~kPa).
+  \item (c) A larger Pinch Point lowers the efficiency (21.37 to 19.24~\%) but also the cost (20.67 to
+        17.60~USD/GJ) and the impact (4.20 to 3.89~mPts/h): a cheaper, smaller heat exchanger costs efficiency.
+  \item (d) The RO Recovery Ratio barely moves the efficiency (19.65 to 20.13~\%), has a cost minimum near 0.59
+        (17.94~USD/GJ), and lowers the impact (4.34 to 3.93~mPts/h); the compromise sits at the upper bound 0.75.
+  \item (e) A higher Reinjection Temperature is worse for efficiency and cost and only slightly better for the impact
+        (from 50 to 90~°C: efficiency 20.19 to 16.52~\%, cost 18.15 to 20.64~USD/GJ, impact 3.94 to 3.64~mPts/h); the
+        compromise sits near the lower bound, at 50.6~°C.
+\end{itemize}
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=\linewidth]{moo_polygen_parametric.png}
+\caption{Parametric study of the polygeneration case from the NSGA TOPSIS choice (\ui{All factors, one panel each}, 11
+points). Exergy Efficiency in black (left axis), Product Cost in blue and Environmental Impact in orange
+(right axes); the dotted line marks the reference value.}
+\label{fig:ch09-poly-param}
+\end{figure}
+
+\paragraph{Significance of the decision variables.} The method \ui{Standardized coefficients (Latin hypercube)} with the
+default 120 points produces the table \ui{Significance of the Decision Variables} (Figure~\ref{fig:ch09-poly-src},
+Table~\ref{tab:ch09-poly-src}). This is the kind of table often reported in thermoeconomic studies: a signed
+coefficient per decision variable and objective, with its p-value. The $R^2$ of the linear regression is 0.975, 0.967
+and 0.990, so the linear coefficients describe these responses well and $\beta$ can be used to rank the variables.
+
+\begin{table}[htbp]
+\centering
+\small
+\caption{Standardized coefficients $\beta$ (p-value) of the polygeneration case, 120-point Latin hypercube, RSM
+models.}
+\label{tab:ch09-poly-src}
+\footnotesize
+\begin{tabular}{@{}llll@{}}
+\toprule
+Decision variable (range) & Exergy Efficiency & Product Cost & Environmental Impact \\
+\midrule
+A: Geothermal Temperature (160--220~°C) & $+0.727$ ($<0.0001$) & $-0.582$ ($<0.0001$) & $+0.844$ ($<0.0001$) \\
+B: Turbine Inlet Pressure (1000--2000~kPa) & $+0.411$ ($<0.0001$) & $-0.179$ ($<0.0001$) & $+0.497$ ($<0.0001$) \\
+C: Pinch Point (5--15~°C) & $-0.363$ ($<0.0001$) & $-0.530$ ($<0.0001$) & $-0.246$ ($<0.0001$) \\
+D: RO Recovery Ratio (0.35--0.75) & $+0.077$ ($<0.0001$) & $-0.052$ (0.0036) & $-0.337$ ($<0.0001$) \\
+E: Reinjection Temperature (50--90~°C) & $-0.551$ ($<0.0001$) & $+0.427$ ($<0.0001$) & $-0.250$ ($<0.0001$) \\
+\midrule
+$R^2$ of the linear regression & 0.975 & 0.967 & 0.990 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=\linewidth]{moo_polygen_src.png}
+\caption{\ui{Global Sensitivity}, method \ui{Standardized coefficients (Latin hypercube)}, 120 points: the graph
+\ui{Significance of the decision variables} and the table with $\beta$ (p-value) for each objective.}
+\label{fig:ch09-poly-src}
+\end{figure}
+
+Geothermal Temperature has the largest $|\beta|$ for all three objectives, and its signs (positive for efficiency and
+impact, negative for cost) state the conflict in one row: a hotter resource is better for efficiency and cost and
+worse for the environment. The Pinch Point is almost as strong a lever for the cost as the temperature ($\beta=-0.530$
+against $-0.582$), and the RO Recovery Ratio matters mainly for the impact ($-0.337$). As explained above, every p-value here is small because the sample is
+generated from smooth models; the p-values say that the linear trends are clear, not that the plant has been tested.
+The one exception is instructive: the RO Recovery Ratio has a small linear effect on cost ($\beta=-0.052$, $p=0.0036$)
+because its cost curve has a minimum inside the range (panel (d) above), which a linear coefficient cannot show.
+
+\paragraph{Sobol indices.} The Sobol indices ($N=8192$, 57\,344 model evaluations per response;
+Figure~\ref{fig:ch09-poly-sobol}) confirm the ranking and add the share of variance. For Exergy Efficiency:
+Geothermal Temperature $S_T=0.465$, Reinjection Temperature 0.258, Turbine Inlet Pressure 0.167, Pinch Point 0.106,
+RO Recovery Ratio 0.008. For Product Cost: Pinch Point 0.365, Geothermal Temperature 0.357, Reinjection Temperature
+0.221, Turbine Inlet Pressure 0.051, RO Recovery Ratio 0.008. For Environmental Impact: Geothermal Temperature 0.604,
+Turbine Inlet Pressure 0.202, RO Recovery Ratio 0.088, Pinch Point 0.057, Reinjection Temperature 0.051. The sums of
+$S_1$ are 0.996, 0.998 and 0.998: the responses are almost additive, and $S_T-S_1$ is at most 0.003 for every factor,
+so the interactions found significant in the ANOVA (AE for efficiency, AB for impact) are real but small. The RO
+Recovery Ratio explains less than 1~\% of the variance of efficiency and cost; for those two objectives it hardly
+matters where it is set, but it does matter for the impact (8.8~\%). Note the difference with the parametric study:
+the RO Recovery Ratio has a visible cost minimum along one line through the compromise, but over the whole region its
+share of the cost variance is small. With more than three factors the factor names under the Sobol graph are rotated;
+the table under the graph gives the values.
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=\linewidth]{moo_polygen_sobol.png}
+\caption{Sobol indices of the polygeneration case ($N=8192$): first-order $S_1$ and total $S_T$ with 95~\% bootstrap
+intervals for each objective.}
+\label{fig:ch09-poly-sobol}
+\end{figure}
+
+\paragraph{Pareto front trade-off.} The tab \ui{Pareto Front Trade-off} (Figure~\ref{fig:ch09-poly-front}) analyzes the
+197 solutions of the NSGA-III front. Geothermal Temperature changes steadily along the front ($\rho=+0.954$ with
+Exergy Efficiency, $-0.808$ with Product Cost, $+0.965$ with Environmental Impact): moving along the front essentially
+means choosing the resource temperature. Turbine Inlet Pressure follows with $|\rho|$ between 0.38 and 0.56, while the
+Pinch Point, the RO Recovery Ratio and the Reinjection Temperature have $|\rho|\le0.38$: the panel of the Reinjection
+Temperature shows that it stays at about 50~°C on almost the whole front and rises only at the low-efficiency end. The
+correlations between the objectives on the front are $+0.988$ between Exergy Efficiency and Environmental Impact (a
+strong conflict, since one is maximized and the other minimized), $-0.711$ between Exergy Efficiency and Product Cost
+(both improve together) and $-0.777$ between Product Cost and Environmental Impact (a conflict). The front is
+therefore essentially a two-sided trade-off: efficiency and cost on one side, environmental impact on the other, set
+mainly by the geothermal temperature. With three objectives the trade-off rate panel is not drawn; it exists only for
+two objectives.
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=\linewidth]{moo_polygen_tradeoff.png}
+\caption{\ui{Pareto Front Trade-off} of the polygeneration NSGA-III front (197 solutions): Spearman heat map and each
+decision variable along the front against Exergy Efficiency.}
+\label{fig:ch09-poly-front}
+\end{figure}
+
+\textbf{Data export.} Each graph has \ui{Copy data} and \ui{Export data\dots}; the significance table, the Sobol tables
+and the Spearman tables are exported with \ui{Export all tables\dots} (right-click on the report), ready for a table in
+a paper.
+
+% ======================================================================================================
 \section{Reporting sensitivity results in a paper}
 \label{sec:ch09-reporting}
 Sensitivity results are easy to over-interpret. The following practice keeps them honest and reproducible.
