@@ -101,6 +101,12 @@ class OptimTab(QWidget):
         it.setTextAlignment(Qt.AlignCenter)
         return it
 
+    def _drop_widget(self, r, col):
+        w = self.tbl.cellWidget(r, col)
+        if w is not None:
+            w.hide()                                 # removeCellWidget deletes the widget only later
+            self.tbl.removeCellWidget(r, col)
+
     def fill_table(self, reset=False):
         p = self.project
         crit = p.opt_criteria
@@ -109,7 +115,7 @@ class OptimTab(QWidget):
             self._rows += [("poe", j) for j in range(len(p.responses)) if p.analysis_kind(j) != "glm"]
         for r in range(self.tbl.rowCount()):         # cell widgets of a previous project must not stay behind
             for col in range(self.tbl.columnCount()):
-                self.tbl.removeCellWidget(r, col)
+                self._drop_widget(r, col)
         self.tbl.clearContents()
         self.tbl.setRowCount(0)
         self.tbl.setRowCount(p.k + len(self._rows))
@@ -125,9 +131,9 @@ class OptimTab(QWidget):
                 self.tbl.setItem(i, 2, self._item(fmt(c.get("low", f.low), 8)))
                 self.tbl.setItem(i, 3, self._item(fmt(c.get("high", f.high), 8)))
             for col in (4, C_SHAPE, C_IMP, C_MODEL):
-                self.tbl.removeCellWidget(i, col)
+                self._drop_widget(i, col)
                 self.tbl.setItem(i, col, self._item("", False))
-            self.tbl.removeCellWidget(i, 1)
+            self._drop_widget(i, 1)
         for n, (kind, j) in enumerate(self._rows):
             row = p.k + n
             y = p.data[:, j]
@@ -168,7 +174,7 @@ class OptimTab(QWidget):
             if kind == "resp":
                 self.tbl.setCellWidget(row, C_MODEL, model_source_combo(p, j, self.model_changed.emit))
             else:
-                self.tbl.removeCellWidget(row, C_MODEL)
+                self._drop_widget(row, C_MODEL)
                 self.tbl.setItem(row, C_MODEL, self._item("follows response", False))
         self.tbl.resizeRowsToContents()
 
