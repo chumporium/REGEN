@@ -13,11 +13,24 @@ if (-not (Test-Path $py)) {
 Write-Host "Creating icon..."
 & $py tools\make_icon.py
 
+Write-Host "Building the user manual..."
+$manual = "docs\manual\REGEN_User_Manual.pdf"
+if (Get-Command pdflatex -ErrorAction SilentlyContinue) {
+    Push-Location docs\manual
+    pdflatex -interaction=nonstopmode -halt-on-error REGEN_User_Manual.tex | Out-Null
+    bibtex REGEN_User_Manual | Out-Null
+    pdflatex -interaction=nonstopmode -halt-on-error REGEN_User_Manual.tex | Out-Null
+    pdflatex -interaction=nonstopmode -halt-on-error REGEN_User_Manual.tex | Out-Null
+    Pop-Location
+}
+if (-not (Test-Path $manual)) { throw "User manual not found: $manual (install a LaTeX distribution with pdflatex)" }
+
 Write-Host "Running PyInstaller..."
 & $py -m PyInstaller --noconfirm --clean --windowed `
     --name "REGEN" `
     --icon assets\icon.ico `
     --add-data "assets;assets" `
+    --add-data "$manual;docs" `
     --exclude-module tkinter `
     --exclude-module PySide6.QtWebEngineCore `
     --exclude-module PySide6.QtWebEngineWidgets `

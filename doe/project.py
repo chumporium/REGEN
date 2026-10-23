@@ -19,6 +19,22 @@ LEGACY_POINT_TYPES = {"Faktorial": "Factorial", "Pusat": "Center", "Aksial": "Ax
                       "Blok": "Block", "Skrining": "Screening", "Ortogonal": "Orthogonal"}
 
 
+def parse_float(text):
+    """Accept numbers with a decimal point or decimal comma. Empty -> NaN."""
+    t = str(text).strip().replace(" ", "")
+    if t == "":
+        return float("nan")
+    if "," in t and "." in t:
+        # format 1.234,5 or 1,234.5
+        if t.rfind(",") > t.rfind("."):
+            t = t.replace(".", "").replace(",", ".")
+        else:
+            t = t.replace(",", "")
+    else:
+        t = t.replace(",", ".")
+    return float(t)
+
+
 @dataclass
 class Factor:
     name: str
@@ -396,6 +412,39 @@ class Project:
         z = z[self.feasible(z)]
         return z[:n]
 
+    def region_corners(self, max_points=4096, seed=0):
+        """Corner points of the design region: vertices of the mixture region and the corners (or, with
+        constraints, the vertices) of the process factor region, crossed with all categoric levels."""
+        lo, hi = self.coded_bounds()
+        comp = self.comp_idx
+        proc = [i for i in self.num_idx if i not in comp]
+        parts = []
+        try:
+            if comp:
+                G, h = self.constraint_system(cols=comp)
+                parts.append((comp, cons_mod.vertices(lo[comp], hi[comp], G, h, True)[0]))
+            if proc:
+                box = np.array(list(itertools.product((-1.0, 1.0), repeat=len(proc)))) if len(proc) <= 12 \
+                    else np.zeros((0, len(proc)))
+                if self.constraints and not comp and len(proc) <= 8:
+                    G, h = self.constraint_system(cols=proc)
+                    box = cons_mod.vertices(lo[proc], hi[proc], G, h, False)[0]
+                parts.append((proc, box))
+        except ValueError:
+            return np.zeros((0, self.k))
+        for i in self.cat_idx:
+            parts.append(([i], np.arange(len(self.factors[i].levels), dtype=float)[:, None]))
+        if not parts or any(len(pts) == 0 for _, pts in parts):
+            return np.zeros((0, self.k))
+        total = int(np.prod([len(pts) for _, pts in parts], dtype=float))
+        rng = np.random.default_rng(seed)
+        idx = (np.array(list(itertools.product(*[range(len(pts)) for _, pts in parts]))) if total <= max_points
+               else np.column_stack([rng.integers(0, len(pts), max_points) for _, pts in parts]))
+        z = np.zeros((len(idx), self.k))
+        for c, (cols, pts) in enumerate(parts):
+            z[:, cols] = pts[idx[:, c]]
+        return z[self.feasible(z)]
+
     def factor_label(self, i):
         f = self.factors[i]
         unit = f" ({f.unit})" if f.unit else ""
@@ -492,7 +541,7 @@ class Project:
             else:
                 raise ValueError(f"Unknown level '{t}' for {f.name}.")
         else:
-            self.coded[idx, i] = float(self.factor_to_coded(i, float(t.replace(",", "."))))
+            self.coded[idx, i] = float(self.factor_to_coded(i, parse_float(t)))
         self.dirty = True
 
     def add_rows(self, count, point_type="Historical"):
@@ -964,9 +1013,9 @@ class Project:
             return sequential_summary(order_fits)
         return models.sequential_summary(order_fits)
 
-    def backward_eliminate(self, j, alpha_out):
+    def backward_eliminate(self, j, alpha_out, keep_hierarchy=True):
         return models.backward_elimination(lambda t: self.fit_terms(j, t), self.model_terms(j), self.k,
-                                           alpha_out, mixture=self.is_mixture)
+                                           alpha_out, keep_hierarchy=keep_hierarchy, mixture=self.is_mixture)
 
     def box_cox(self, j):
         if self.analysis_kind(j) != "ols":

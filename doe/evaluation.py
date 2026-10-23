@@ -56,7 +56,7 @@ def evaluate(coded, terms, mixture=False, blocks=None, space=None, delta=2.0, si
 
     return {"n": n, "p": p, "df_resid": df_resid, "df_pe": df_pe, "df_lof": df_lof, "dc": dc, "se": se,
             "vif": vif, "power": power, "leverage": lev, "aliased": dc.aliased, "alias": alias,
-            "xtx_inv": xtx_inv, "labels": _labels(dc)}
+            "xtx_inv": xtx_inv, "labels": _labels(dc), "coded": coded}
 
 
 def _labels(dc):
@@ -99,8 +99,13 @@ def correlations(ev):
     return labels, coef, [labels[k] for k in keep], np.atleast_2d(R)
 
 
-def matrix_measures(ev, region_points=None):
-    """Design matrix quality measures (for comparing designs / assessing historical data)."""
+def matrix_measures(ev, region_points=None, corner_points=None):
+    """Design matrix quality measures (for comparing designs / assessing historical data).
+
+    region_points: uniform random points in the design region (average, minimum and maximum prediction variance).
+    corner_points: corners / vertices of the region; together with the design points and the random points they
+    give the maximum prediction variance for the G-efficiency. Block columns are left out of both p and v(x).
+    """
     X = ev["dc"].X
     n, p = X.shape
     XtX = X.T @ X
@@ -116,7 +121,12 @@ def matrix_measures(ev, region_points=None):
     out["lev_max"], out["lev_mean"] = float(lev.max()), float(lev.mean())
     if region_points is not None and len(region_points):
         v = std_error_prediction(ev, region_points) ** 2           # prediction variance (units of σ²)
-        out["pv_max"], out["pv_mean"], out["pv_min"] = float(v.max()), float(v.mean()), float(v.min())
-        out["g_eff"] = float(100 * p / (n * v.max())) if v.max() > 0 else 0.0
+        extra = [np.atleast_2d(a) for a in (ev.get("coded"), corner_points) if a is not None and len(a)]
+        v_ext = std_error_prediction(ev, np.vstack(extra)) ** 2 if extra else np.zeros(0)
+        v_max = float(max(v.max(), v_ext.max(initial=0.0)))
+        out["pv_max"], out["pv_mean"], out["pv_min"] = v_max, float(v.mean()), float(v.min())
+        p_model = len(ev["dc"].term_idx)                             # model columns only (no block columns)
+        g = 100 * p_model / (n * v_max) if v_max > 0 else 0.0
+        out["g_eff"] = float(min(g, 100.0) if g <= 100.0 + 1e-9 else g)
         out["i_scaled"] = float(n * v.mean())                        # scaled average prediction variance
     return out

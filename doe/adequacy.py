@@ -52,7 +52,7 @@ def assess(project, j, split_train=0.85):
     if p.response_family(j) != "normal":
         checks.append(_check("Response type", p.response_family(j), "bad",
                              "ANN in this application is for continuous responses. Binomial/Poisson responses are "
-                             "analyzed with logistic/Poisson regression on the Analysis page."))
+                             "analyzed with logistic/Poisson regression on the RSM Analysis page."))
         res["verdict"], res["level"] = "Not adequate - the response is not continuous", "bad"
         return res
     if N < 3:
@@ -146,8 +146,9 @@ def assess(project, j, split_train=0.85):
     st = "warn" if abs(sk) > 1 or (np.isfinite(ratio_mm) and ratio_mm > 10) else "ok"
     checks.append(_check("Response distribution", f"skewness {sk:.2f}" + (f", max/min {ratio_mm:.1f}"
                                                                           if np.isfinite(ratio_mm) else ""), st,
-                         "Highly skewed (|skewness| > 1) or max/min > 10: consider a ln transform (Analysis tab) "
-                         "because errors at large values will dominate training."
+                         "Highly skewed (|skewness| > 1) or max/min > 10: errors at large values will dominate "
+                         "training. A response transform (e.g. ln) applies only to the RSM model (RSM Analysis "
+                         "page); the ANN is trained on the response in its original units."
                          if st == "warn" else "The response spread is reasonable."))
 
     # 8. correlation between factors
@@ -239,7 +240,9 @@ def assess(project, j, split_train=0.85):
     if res.get("noise"):
         rec.append(f"Realistic RMSE target ≈ {res['noise']:.4g} (equal to the noise). Anything smaller = overfitting.")
     if any(c["name"] == "Response distribution" and c["status"] == "warn" for c in checks):
-        rec.append("Consider a response transform (ln) on the Analysis tab.")
+        rec.append("Skewed response: a response transform (e.g. ln) on the RSM Analysis page applies to the RSM "
+                   "model only. The ANN is trained on the response in its original units; the Normalization "
+                   "options only rescale it linearly and do not reduce the skewness.")
     if n_bad or N < 12:
         rec.append("Add runs (e.g. Augment Design on the Data page) before relying on the ANN.")
     return res

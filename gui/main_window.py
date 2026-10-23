@@ -282,7 +282,8 @@ class MainWindow(QMainWindow):
         self._action(tools, "Data Normalization", lambda: self.go("norm"))
 
         h = mb.addMenu("&Help")
-        self._action(h, "Getting Started", self.show_guide, QKeySequence.HelpContents)
+        self._action(h, "User Manual", self.show_manual, QKeySequence.HelpContents)
+        self._action(h, "Getting Started", self.show_guide)
         self._action(h, "Design Guide (RSM / ANN Run Counts)...", self.design_guide)
         h.addSeparator()
         self._action(h, f"About {APP_NAME}", self.show_about)
@@ -498,6 +499,20 @@ class MainWindow(QMainWindow):
         QApplication.restoreOverrideCursor()
         self.statusBar().showMessage(f"PDF report saved: {path}", 6000)
         QDesktopServices.openUrl(QUrl.fromLocalFile(path))
+
+    def show_manual(self):
+        """Open the PDF user manual (installed next to the program, or built in docs/manual when run from source)."""
+        import sys
+        roots = [getattr(sys, "_MEIPASS", ""), os.path.dirname(sys.executable),
+                 os.path.dirname(os.path.dirname(os.path.abspath(__file__)))]
+        names = [os.path.join("docs", "REGEN_User_Manual.pdf"), os.path.join("docs", "manual", "REGEN_User_Manual.pdf")]
+        for path in (os.path.join(r, n) for r in roots if r for n in names):
+            if os.path.isfile(path):
+                QDesktopServices.openUrl(QUrl.fromLocalFile(path))
+                return
+        QMessageBox.information(self, "User Manual", "The user manual (REGEN_User_Manual.pdf) was not found next to "
+                                "the program. It can be downloaded with the installer from "
+                                "https://github.com/chumporium/REGEN/releases.")
 
     def show_guide(self):
         QMessageBox.information(self, "Getting Started", (

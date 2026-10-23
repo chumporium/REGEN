@@ -141,7 +141,7 @@ class AnalysisTab(QWidget):
         self.tabs.addTab(eff_w, "Effects (Factorial)")
         split.addWidget(self.tabs)
         split.setSizes([200, 950])
-        lay.addWidget(split)
+        lay.addWidget(split, 1)
 
         self.cb_resp.currentIndexChanged.connect(self.on_response_changed)
         self.cb_order.currentIndexChanged.connect(self.on_order_changed)
@@ -320,7 +320,7 @@ class AnalysisTab(QWidget):
         p = self.project
         j = self.resp()
         try:
-            terms = p.backward_eliminate(j, self.sp_alpha.value())
+            terms = p.backward_eliminate(j, self.sp_alpha.value(), keep_hierarchy=self.chk_hier.isChecked())
         except (ValueError, np.linalg.LinAlgError) as exc:
             self.lbl_err.setText(str(exc))
             return

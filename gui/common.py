@@ -11,6 +11,8 @@ from PySide6.QtCore import QAbstractTableModel, QModelIndex, Qt, QThread, Signal
 from PySide6.QtGui import QBrush, QColor  # noqa: E402
 from PySide6.QtWidgets import QMenu, QVBoxLayout, QWidget  # noqa: E402
 
+from doe.project import parse_float  # noqa: E402,F401  (shared with the data model: same number formats)
+
 from . import plotdata, theme  # noqa: E402
 
 theme.apply_matplotlib()
@@ -41,22 +43,6 @@ tr.model td {{ font-weight: 600; background: #f7f7f7; }}
 pre {{ font-family: Consolas, monospace; font-size: 9pt; }}
 </style>
 """
-
-
-def parse_float(text):
-    """Accept numbers with a decimal point or decimal comma. Empty -> NaN."""
-    t = str(text).strip().replace(" ", "")
-    if t == "":
-        return math.nan
-    if "," in t and "." in t:
-        # format 1.234,5 or 1,234.5
-        if t.rfind(",") > t.rfind("."):
-            t = t.replace(".", "").replace(",", ".")
-        else:
-            t = t.replace(",", "")
-    else:
-        t = t.replace(",", ".")
-    return float(t)
 
 
 def fmt(v, digits=5):
@@ -152,7 +138,9 @@ def model_source_combo(project, j, on_change=None):
         cb.setToolTip("No ANN model for this response yet (train one on the ANN page first).")
     else:
         te = m.metrics.get("test", {}) if isinstance(m.metrics, dict) else {}
-        cb.setToolTip(f"ANN {m.arch}" + (f", test R2 {te['r2']:.4f}" if te.get("r2") is not None else ""))
+        q2 = (getattr(m, "cv_diag", None) or {}).get("q2")
+        cb.setToolTip(f"ANN {m.arch}" + (f", cross-validation Q2 {q2:.4f}" if q2 is not None else "")
+                      + (f", test R2 {te['r2']:.4f} (single split)" if te.get("r2") is not None else ""))
     fit = project.fit(j)
     if fit is not None:
         pr2 = fit.stats.get("pred_r2")

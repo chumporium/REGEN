@@ -364,10 +364,17 @@ def assess(project, j, order=None, n_suggest=None):
                                           "(Backward Elimination) or check for outliers.", ("backward", None)))
         if np.isfinite(pr2) and pr2 < 0.5:
             st = "bad" if pr2 < 0 else "warn"
-        checks.append(_chk("resp", "Model fit", f"R² {r2:.3f}, Adj {ar2:.3f}, Pred {pr2:.3f}"
-                           + (f", LOF p {lof:.3f}" if np.isfinite(lof) else ""), st,
-                           "Pred R² shows the ability to predict new data; an Adj–Pred difference > 0.2 indicates "
-                           "overfitting.", recs))
+        if not np.isfinite(r2):
+            checks.append(_chk("resp", "Model fit", "R², Adj R², Pred R² not available", "info",
+                               "R², adjusted R² and predicted R² are not defined for this model. "
+                               + ("The split-plot model is judged by the Wald F tests of its terms on the Split-Plot (REML) tab of "
+                               "the RSM Analysis page." if p.analysis_kind(j) == "reml" else
+                                  "Judge the model by the term tests on the RSM Analysis page."), recs))
+        else:
+            checks.append(_chk("resp", "Model fit", f"R² {r2:.3f}, Adj {ar2:.3f}, Pred {pr2:.3f}"
+                               + (f", LOF p {lof:.3f}" if np.isfinite(lof) else ""), st,
+                               "Pred R² shows the ability to predict new data; an Adj–Pred difference > 0.2 indicates "
+                               "overfitting.", recs))
         noise = [v for v in (np.sqrt(s2 / dfpe) if dfpe else None,) if v]
         if noise:
             snr = float(np.std(y, ddof=1) / max(noise))
@@ -388,6 +395,11 @@ def assess(project, j, order=None, n_suggest=None):
                                "The model must be significant (p < 0.05) before it is used for optimization.",
                                [] if pm < 0.05 else [_rec("complete", "Add more runs or widen the factor ranges so the "
                                                                       "factor effects are larger than the noise.")]))
+        elif p.analysis_kind(j) == "reml":
+            checks.append(_chk("opt", "Model significance", "no overall model F test (split-plot)", "info",
+                               "There is no overall model test for the split-plot (REML) model. "
+                               "The split-plot model is judged by the Wald F tests of its terms on the Split-Plot (REML) tab of "
+                               "the RSM Analysis page."))
         pr2 = fit.stats.get("pred_r2", np.nan)
         if np.isfinite(pr2):
             checks.append(_chk("opt", "Prediction reliability (Pred R²)", f"{pr2:.3f}",
@@ -396,7 +408,7 @@ def assess(project, j, order=None, n_suggest=None):
                                [] if pr2 >= 0.7 else
                                [_rec("complete", "Add D-optimal runs, then analyze again.", ("add_runs", "dopt"))]
                                + ([_rec("treatment", "The pattern looks strongly nonlinear and there is enough data: "
-                                                     "try an ANN (Neural Network page), then compare it with RSM.")]
+                                                     "try an ANN (ANN page), then compare it with RSM.")]
                                   if N >= 30 else [])))
             if pr2 < 0.7 and "dopt" not in sugg:
                 sugg["dopt"] = suggest_d_optimal(p, terms, existing, max(4, n_par // 2))

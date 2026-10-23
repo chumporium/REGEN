@@ -135,9 +135,17 @@ def ann_summary_html(project, j, m, search=None):
              f"{' / '.join(str(v) for v in m.layers)} neurons, activation {ann.ACTIVATIONS[m.activation].split()[0]}, "
              f"{m.n_out} linear outputs). Algorithm: <b>{alg}</b>. Weights & biases: {m.n_weights}. Normalization: "
              f"{ann.NORMS[getattr(m, 'norm', 'mapminmax')].split(' - ')[0]}.</p>")
+    if m.gamma is None:
+        gamma_txt = ""
+    elif m.algorithm == "trainbr" and m.best_epoch <= ann.BR_WARMUP and m.gamma >= m.n_weights:
+        # the weights come from an epoch before the first gamma update: gamma is still its starting value W
+        gamma_txt = (f", effective parameters γ not estimated yet (best epoch {m.best_epoch} lies within the "
+                     f"warm-up; γ is first estimated after epoch {ann.BR_WARMUP})")
+    else:
+        gamma_txt = f", effective parameters γ = {m.gamma:.1f} of {m.n_weights}"
     h.append(f"<p class='note'>Data split: {len(m.idx_train)} training / {len(m.idx_val)} validation / "
              f"{len(m.idx_test)} test (seed {m.seed}). Epochs: {m.epochs}, stopped: {m.stop_reason}"
-             + (f", effective parameters γ = {m.gamma:.1f} of {m.n_weights}" if m.gamma is not None else "")
+             + gamma_txt
              + f". Restarts: {m.restarts}"
              + (f" (parallel on {m.workers} CPU cores)" if getattr(m, "workers", 1) > 1 else "") + ".</p>")
     h.append(diagnosis_html(m))
@@ -504,7 +512,7 @@ def search_html(project, res, top=None):
         if rcv["q2"] < 0 and res["scheme"] == "kfold":
             h.append("<p class='note'>Negative RSM test R²: small designs (e.g. Box-Behnken/CCD) lose their "
                      "structure when some runs are left out in each fold, so RSM cross-validation is very pessimistic. "
-                     "Compare also with RSM Predicted R² on the Analysis page.</p>")
+                     "Compare also with RSM Predicted R² on the RSM Analysis page.</p>")
     h.append("<h4>All Architectures (Sorted by Test Error)</h4><table><tr><th>No</th><th>Hidden layers</th>"
              "<th>Neurons per layer</th><th>Weights</th><th>Training R²</th><th>Validation R²</th><th>Test R²</th>"
              "<th>SE</th><th>Best epoch</th><th class='l'>Status</th></tr>")
@@ -589,14 +597,15 @@ def learning_html(project, j, lc):
                  f"times the largest training set used here (5 × {n_full} = {5 * n_full} training runs), that is "
                  f"more than {5 * N} runs in total including the test runs. Consider RSM, fewer factors, or narrower "
                  "factor ranges.</p>")
-    warn = ann.learning_warnings(lc) if st in ("more", "far", "enough") else []
-    if warn:
-        h.append("<p class='warn'>The run estimate is unreliable: " + "; ".join(warn) + ". Use it only as an "
-                 "indication of whether more runs help, not as the number of runs to add.</p>")
     elif st == "few":
         h.append(f"<p class='warn'><b>Too little data ({N} runs) for a reliable learning curve.</b> Each point of "
                  "the curve uses only a dozen or so runs, so the results vary widely. Treat it as a rough indication; "
                  "ANN generally needs at least 20 to 30 runs.</p>")
+    if st in ("more", "far", "enough"):
+        warn = ann.learning_warnings(lc)
+        if warn:
+            h.append("<p class='warn'>The run estimate is unreliable: " + "; ".join(warn) + ". Use it only as an "
+                     "indication of whether more runs help, not as the number of runs to add.</p>")
     rs = lc["rsm"][-1]
     if np.isfinite(rs):
         better = "RSM" if rs < lc["ann"][-1] else "ANN"
@@ -1036,7 +1045,7 @@ class AnnTab(QWidget):
         j = self.resp()
         if p.response_family(j) != "normal":
             raise ValueError("ANN here is for continuous (normal) responses. For binomial/Poisson responses use "
-                             "logistic/Poisson regression on the Analysis page.")
+                             "logistic/Poisson regression on the RSM Analysis page.")
         return [[j]]
 
     def _restarts_for(self, kw):

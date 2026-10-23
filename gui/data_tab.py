@@ -530,6 +530,11 @@ class DataTab(QWidget):
         self.btn_row_add.setVisible(hist)
         self.btn_row_del.setVisible(hist)
         self.btn_augment.setVisible(not hist)
+        self.btn_augment.setEnabled(not p.is_split_plot)
+        self.btn_augment.setToolTip("Augmenting split-plot designs is not supported: the new runs would need their "
+                                    "own whole plots. Create a new split-plot design instead."
+                                    if p.is_split_plot else "Add runs to the design (center points, replicates, "
+                                    "axial points or a foldover).")
         self.hint.setText(
             ("Enter the factor and response values from the historical data (categorical: type the level name). "
              if hist else "Enter the response values in the white columns. ")

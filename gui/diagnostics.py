@@ -164,7 +164,7 @@ def p_resid_pred(ax, ctx):
     if is_glm(ctx.fit):
         ax.set_xlabel(f"Linear predictor ({'logit' if ctx.fit.family == 'binomial' else 'log'} scale)")
     else:
-        ax.set_xlabel("Predicted")
+        ax.set_xlabel(fitted_scale(ctx.fit)[3])         # "Predicted (transformed scale)" with a transform
     ax.set_ylabel("Ext. studentized residuals")
     ax.set_title("Residuals vs Predicted")
     return x, y, idx, m
@@ -588,6 +588,8 @@ class DiagnosticsPanel(QWidget):
             res_lab = "Deviance resid."
         else:
             pred, act_lab, pred_lab, res_lab = np.asarray(f.yhat, float), "Actual", "Predicted", "Residual"
+            if f.transform and f.transform.get("kind", "none") != "none":
+                pred_lab, res_lab = "Predicted (transformed scale)", "Residual (transformed scale)"
         heads = ["Run", "Std", "Type", act_lab, pred_lab, res_lab, "Leverage", "Int. stud. resid.",
                  "Ext. stud. resid."]
         cols = [c.run[o], c.rows[o] + 1, np.array([p.point_types[r] for r in c.rows[o]], object),

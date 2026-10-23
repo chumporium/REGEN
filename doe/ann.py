@@ -25,6 +25,7 @@ NORMS = {"mapminmax": "Min-max to [-1, 1] (mapminmax) - recommended",
          "none": "No normalization (for comparison)"}
 LM_MAX_WEIGHTS = 2000       # above this LM/Bayesian is too heavy (W x W matrix) -> switch to Adam automatically
 LM_MAX_JACOBIAN = 30e6      # Jacobian element limit (training rows x outputs x weights) for LM/Bayesian
+BR_WARMUP = 15              # trainbr epochs before the first update of alpha, beta and gamma
 ALGORITHMS = {"trainbr": "Bayesian Regularization (trainbr) - recommended for small DOE data",
               "trainlm": "Levenberg-Marquardt (trainlm)",
               "adam": "Adam mini-batch - for very large networks / very large data"}
@@ -469,7 +470,7 @@ def _train_lm(model, Xn, Yn, tr, va, te, w, max_epochs, max_fail, mu=1e-3, min_g
 
 
 def _train_br(model, Xn, Yn, tr, va, te, w, max_epochs, max_fail=6, early_stop=False, mu=5e-3, min_grad=1e-7,
-              warmup=15, tol=0.0, cancel=None):
+              warmup=BR_WARMUP, tol=0.0, cancel=None):
     """Bayesian regularization (MacKay) inside Levenberg-Marquardt, like MATLAB trainbr.
 
     With early_stop and validation data: the weights with the lowest validation error are used; training stops when

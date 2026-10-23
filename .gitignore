@@ -16,6 +16,16 @@ Paper_bahan/
 _arsip_ketidakpastian/
 imp/
 
+# LaTeX build files of the user manual (the PDF itself is built by build.ps1)
+docs/manual/**/*.aux
+docs/manual/*.toc
+docs/manual/*.bbl
+docs/manual/*.blg
+docs/manual/*.out
+docs/manual/*.lof
+docs/manual/*.lot
+docs/manual/*.synctex.gz
+
 # Other
 *.log
 selftest.log

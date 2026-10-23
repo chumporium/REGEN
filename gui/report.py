@@ -66,6 +66,8 @@ def summary_html(project, j, rows, suggested, heading="h2"):
         note = []
         if r["order"] == suggested:
             note.append("<span class='sig'>Suggested</span>")
+            if np.isfinite(r["lof_p"]) and r["lof_p"] < 0.05:
+                note.append("<span class='warn'>Significant lack of fit</span>")
         if r["aliased"]:
             note.append("<span class='ns'>Aliased</span>")
         h.append(f"<tr><td class='l'>{models.order_label(r['order'])}</td>"
@@ -80,6 +82,11 @@ def summary_html(project, j, rows, suggested, heading="h2"):
              "whose Adjusted R² and Predicted R² are high.</p>")
     if suggested == "mean":
         h.append("<p class='ns'>No model is significant compared with the mean.</p>")
+    lof = next((r["lof_p"] for r in rows[1:] if r["order"] == suggested), np.nan)
+    if np.isfinite(lof) and lof < 0.05:
+        h.append(f"<p class='warn'>Warning: the suggested model ({models.order_label(suggested)}) has significant lack "
+                 f"of fit (p {'' if lof < 1e-4 else '= '}{fmt_p(lof)}). It does not describe the data within the pure error: check for "
+                 "outliers, try a response transform or a higher-order model, or consider an ANN.</p>")
     return "".join(h)
 
 
@@ -281,6 +288,11 @@ def equation_html(project, j, fit, heading="h2"):
         if act is not None:
             eq = models.format_equation(lhs, act[0], act[1], names=names, lhs=lhs)
             h += ["<h3>In Actual Components</h3>", f"<pre class='box'>{eq}</pre>"]
+        elif project.is_combined:
+            h.append("<p class='note'>The equation in actual units is not given for combined mixture-process "
+                     "designs: the model crosses the mixture terms with the process terms, and the conversion to "
+                     "actual units is only done for mixture models without process factors. Use the equation "
+                     "above (pseudo-components, process factors coded −1 to +1).</p>")
         else:
             h.append("<p class='note'>The equation in actual components is shown only when all lower "
                      "limits = 0. Use the pseudo-component equation above.</p>")

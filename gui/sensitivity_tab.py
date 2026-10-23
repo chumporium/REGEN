@@ -731,7 +731,8 @@ class SensitivityTab(QWidget):
             ax.set_ylabel(f"Δ{onames[1]} / Δ{onames[0]}")
             ax.set_title("Trade-off rate along the front")
             ax.grid(alpha=0.3)
-        fig.suptitle(f"Pareto front trade-off ({res['n']} solutions, {r.get('algorithm', 'NSGA')})", fontsize=10)
+        alg = {"nsga2": "NSGA-II", "nsga3": "NSGA-III"}.get(r.get("algorithm"), "NSGA")
+        fig.suptitle(f"Pareto front trade-off ({res['n']} solutions, {alg})", fontsize=10)
         self.can_front.draw()
 
         h = [REPORT_CSS, "<h3>Pareto Front Trade-off</h3><h4>Spearman correlation of each factor with each objective "
@@ -751,7 +752,8 @@ class SensitivityTab(QWidget):
                  "front and drives the trade-off between the objectives; a factor with ρ close to 0 stays nearly "
                  "constant on the front, so it can be set once. A negative correlation between two objectives means "
                  "they conflict: one improves only when the other gets worse. The trade-off rate (two objectives) is "
-                 "the change of the second objective per unit change of the first between neighbouring solutions. "
+                 "the change of the second objective per unit change of the first, computed between the means of "
+                 "groups of neighbouring solutions. "
                  "The p-values describe the ordering of the solutions on this front, not the uncertainty of the "
                  "models.</p>")
         self.txt_front.setHtml("".join(h))

@@ -107,6 +107,11 @@ class OptimTab(QWidget):
         self._rows = [("resp", j) for j in range(len(p.responses))]
         if p.has_poe:
             self._rows += [("poe", j) for j in range(len(p.responses)) if p.analysis_kind(j) != "glm"]
+        for r in range(self.tbl.rowCount()):         # cell widgets of a previous project must not stay behind
+            for col in range(self.tbl.columnCount()):
+                self.tbl.removeCellWidget(r, col)
+        self.tbl.clearContents()
+        self.tbl.setRowCount(0)
         self.tbl.setRowCount(p.k + len(self._rows))
         for i, f in enumerate(p.factors):
             c = {} if reset else crit.get(f"f{i}", {})

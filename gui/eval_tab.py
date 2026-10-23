@@ -60,7 +60,7 @@ class EvalTab(QWidget):
         split.addWidget(self.txt)
         split.addWidget(self.canvas)
         split.setSizes([620, 560])
-        lay.addWidget(split)
+        lay.addWidget(split, 1)
 
         for w in (self.cb_order, self.cb_alpha, self.cb_graph):
             w.currentIndexChanged.connect(self.refresh)
@@ -104,7 +104,7 @@ class EvalTab(QWidget):
             return
         self.ev = ev
         self.corr = evaluation.correlations(ev)
-        self.measures = evaluation.matrix_measures(ev, p.region_samples(3000))
+        self.measures = evaluation.matrix_measures(ev, p.region_samples(3000), p.region_corners())
         self.txt.setHtml(REPORT_CSS + self.html(ev, order))
         self.draw()
 
@@ -173,7 +173,9 @@ class EvalTab(QWidget):
                 ("Trace (X'X)⁻¹", fmt(m["trace_inv"], 4), "smaller is better (A criterion)"),
                 ("D-efficiency (%)", fmt(m["d_eff"], 4), "relative to an ideal ±1 orthogonal design"),
                 ("A-efficiency (%)", fmt(m["a_eff"], 4), "mean coefficient variance"),
-                ("G-efficiency (%)", fmt(m.get("g_eff", np.nan), 4), "worst prediction variance in the design region"),
+                ("G-efficiency (%)", fmt(m.get("g_eff", np.nan), 4),
+                 "worst prediction variance in the design region (design points, corners or vertices, random "
+                 "points); block terms excluded"),
                 ("Average prediction variance (I, ×σ²)", fmt(m.get("pv_mean", np.nan), 4),
                  "I criterion: mean over the design region - smaller is better"),
                 ("Scaled average prediction variance (n·I)", fmt(m.get("i_scaled", np.nan), 4),

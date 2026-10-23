@@ -21,6 +21,11 @@ def has_transform(fit):
     return bool(tr) and tr.get("kind", "none") != "none"
 
 
+def link_name(fit):
+    """Link function of a GLM fit (binomial -> logit, Poisson -> log), or None for a normal response."""
+    return {"binomial": "logit", "poisson": "log"}.get(getattr(fit, "family", None))
+
+
 class PredictTab(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -71,7 +76,10 @@ class PredictTab(QWidget):
             "Perform n runs at this point and type the mean result in the <b>Confirmation mean</b> column: "
             "if it falls inside the PI, the model is <b>confirmed</b>. If the response is transformed, the "
             "intervals are computed on the transformed scale and then converted back to the original scale; the "
-            "standard error is then shown on the transformed scale. An ANN model has no intervals: its prediction "
+            "standard error is then shown on the transformed scale. For a binomial or Poisson response (GLM) the "
+            "standard error is on the link scale (logit or log) and the CI is converted back to a probability or "
+            "count; there is no PI. Typed confirmation means are cleared when a different point is sent to this "
+            "page. An ANN model has no intervals: its prediction "
             "is confirmed when |confirmation mean − prediction| ≤ 5% of the observed range of the response data.")
         info.setWordWrap(True)
         info.setStyleSheet("color: #444;")
@@ -123,6 +131,7 @@ class PredictTab(QWidget):
 
     def set_point(self, coded):
         p = self.project
+        old = self.point()
         self._busy = True
         for i, w in enumerate(self.inputs):
             if isinstance(w, QComboBox):
@@ -130,6 +139,8 @@ class PredictTab(QWidget):
             else:
                 w.setValue(float(p.factor_to_actual(i, coded[i])))
         self._busy = False
+        if not np.allclose(old, self.point(), rtol=0, atol=1e-12, equal_nan=True):
+            self._confirm = {}          # typed confirmation means belong to the previous point
         self.compute()
 
     def point(self):
@@ -173,7 +184,9 @@ class PredictTab(QWidget):
             else:
                 iv = fit.intervals(x[None, :], n_obs=n, level=level)
                 se = iv["se_mean"][0]
-                se_txt = fmt(se, 4) + (" (transformed scale)" if has_transform(fit) and np.isfinite(se) else "")
+                scale = (f" (link scale, {link_name(fit)})" if link_name(fit) else
+                         " (transformed scale)" if has_transform(fit) else "")
+                se_txt = fmt(se, 4) + (scale if np.isfinite(se) else "")
                 cells += [fmt(iv["pred"][0], 6), se_txt, fmt(iv["ci"][0][0], 6), fmt(iv["ci"][1][0], 6),
                           fmt(iv["pi"][0][0], 6), fmt(iv["pi"][1][0], 6)]
                 self._confirm.setdefault(j, "")
@@ -183,7 +196,10 @@ class PredictTab(QWidget):
                 it.setTextAlignment(Qt.AlignCenter)
                 if c == 1:
                     it.setBackground(QBrush(QColor("#e6f4ea")))
-                if c == 2 and fit is not None and has_transform(fit):
+                if c == 2 and fit is not None and link_name(fit):
+                    it.setToolTip(f"Standard error of the linear predictor on the link scale ({link_name(fit)}); "
+                                  "the CI is converted back to the response scale.")
+                elif c == 2 and fit is not None and has_transform(fit):
                     it.setToolTip("Standard error of the mean on the transformed scale of the response; the CI and "
                                   "PI are converted back to the original scale.")
                 self.tbl.setItem(j, c, it)

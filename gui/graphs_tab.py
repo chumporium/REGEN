@@ -164,13 +164,14 @@ class GraphsTab(QWidget):
     def update_note(self):
         kind = self.kind()
         notes = {
-            "overlay": "Each response's limits are taken from the Optimization page (Lower & Upper Limit for "
+            "overlay": "Each response's limits are taken from the Desirability page (Lower & Upper Limit for "
                        "responses with a goal selected). Yellow area = all responses meet their limits.",
-            "desirability": "Combined desirability from the criteria on the Optimization page. Star = latest best "
+            "desirability": "Combined desirability from the criteria on the Desirability page. Star = latest best "
                             "solution (if it lies in this slice).",
             "cube": "Corner numbers = predicted response at each low/high level combination.",
-            "perturbation": "All numeric factors are moved away from the reference point (the values below are "
-                            "the reference for categorical factors).",
+            "perturbation": "Each numeric factor is moved over its range (-1 to +1) while the other factors stay "
+                            "at the reference point set below; the x axis is the deviation from the reference "
+                            "value in coded units.",
             "interaction": "Non-parallel lines = interaction present. Error bars = 95% CI.",
             "allfactors": "Numeric factors are held at the center of their range. Choose below the level at which "
                           "each categorical factor is held in the panels of the other factors.",
@@ -192,6 +193,8 @@ class GraphsTab(QWidget):
         used = self.axes()
         if self.kind() == "allfactors":
             used = list(p.num_idx)          # categorical factors still need a reference level
+        elif self.kind() == "perturbation":
+            used = []                       # every factor has a value in the reference point
         center = np.nanmean(p.coded, axis=0) if p.is_mixture else None
         for i in range(p.k):
             if i in used:
@@ -222,7 +225,8 @@ class GraphsTab(QWidget):
             self.slice_widgets.append((i, w))
         self.g_slice.setVisible(bool(self.slice_widgets))
         self.g_slice.setTitle("Other Components (Actual Units)" if p.is_mixture else
-                              "Reference Levels" if self.kind() == "allfactors" else "Other Factor Values")
+                              "Reference Levels" if self.kind() == "allfactors" else
+                              "Reference Point" if self.kind() == "perturbation" else "Other Factor Values")
 
     def base(self):
         p = self.project
@@ -257,7 +261,7 @@ class GraphsTab(QWidget):
         if kind in ("overlay", "desirability"):
             crit = self._criteria()
             if not crit:
-                self.canvas.message("No criteria yet. Choose response goals and limits on the Optimization page.")
+                self.canvas.message("No criteria yet. Choose response goals and limits on the Desirability page.")
                 return
             if kind == "overlay":
                 items = [(p.responses[c["index"]].name, c["fit"], c["low"], c["high"]) for c in crit]

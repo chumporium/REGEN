@@ -147,7 +147,7 @@ def self_test(out_dir):
         q.notes = "test notes"
         ev = evaluation.evaluate(q.coded, q.model_terms(0), False, None, q.space)
         labs, coef, labs2, R = evaluation.correlations(ev)
-        mm = evaluation.matrix_measures(ev, q.region_samples(1000))
+        mm = evaluation.matrix_measures(ev, q.region_samples(1000), q.region_corners())
         summary_html(q)
         coef_table_html(q)
         gc = GraphColumnsTab()

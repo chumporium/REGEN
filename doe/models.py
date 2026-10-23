@@ -38,7 +38,7 @@ TRANSFORMS = {
 SUPERSCRIPT = {2: "²", 3: "³"}
 PROCESS_FACTORIAL = ("full_factorial", "fractional_factorial", "general_factorial")
 MIXTURE = ("simplex_lattice", "simplex_centroid", "optimal_mixture", "combined_optimal", "historical_mixture")
-SCREENING = ("plackett_burman", "taguchi")
+SCREENING = ("plackett_burman", "taguchi", "dsd")
 
 
 # ------------------------------------------------------------------ factor space

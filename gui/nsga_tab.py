@@ -432,10 +432,14 @@ def compare_html(project, cmp):
                  f"may exist only in the {who} model (for example, ANN extrapolating or RSM being too simple).</li>")
     q = cmp["quality"]
     pr = [x["pred_r2"] for x in q if np.isfinite(x["pred_r2"])]
+    cv = [float(x["ann_q2"]) for x in q if x.get("ann_q2") is not None and np.isfinite(float(x["ann_q2"]))]
     at = [x["ann_test"] for x in q if np.isfinite(x["ann_test"])]
-    if pr and at:
-        h.append(f"<li>Prediction accuracy on new data: RSM mean Pred R² {np.mean(pr):.3f}, ANN mean test R² "
-                 f"{np.mean(at):.3f}. If the fronts differ, the model with higher accuracy is more trustworthy.</li>")
+    # the cross-validated Q² (architecture search) is more reliable than one train/test split of small data
+    ann_acc, ann_lab = (cv, "cross-validation Q²") if len(cv) == len(q) else (at, "test R² (single split)")
+    if pr and ann_acc:
+        h.append(f"<li>Prediction accuracy on new data: RSM mean Pred R² {np.mean(pr):.3f}, ANN mean {ann_lab} "
+                 f"{np.mean(ann_acc):.3f}. If the fronts differ, the model with higher accuracy is more "
+                 "trustworthy.</li>")
     h.append("</ul>")
     return "".join(h)
 
@@ -691,7 +695,7 @@ class NsgaTab(QWidget):
         btns.addWidget(self.progress)
         btns.addWidget(self.lbl_prog, 1)
         gl.addLayout(btns)
-        note = QLabel("Factor limits are taken from the Optimization tab. Response lower/upper limits (optional) "
+        note = QLabel("Factor limits are taken from the Desirability page. Response lower/upper limits (optional) "
                       "become constraints. TOPSIS weights are used to select the compromise solution. Choose the model "
                       "for each response (RSM or ANN) directly in the Model column.")
         note.setWordWrap(True)

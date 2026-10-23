@@ -204,16 +204,23 @@ def front_analysis(project, result):
     return {"factors": idx, "objectives": objs, "rho": rho, "p": p, "rho_obj": ro, "p_obj": po, "n": len(X)}
 
 
-def tradeoff_rates(f1, f2):
-    """Local trade-off along a two-objective front sorted by the first objective: change of objective 2 per unit
-    change of objective 1 between neighbouring solutions."""
+def tradeoff_rates(f1, f2, groups=None):
+    """Trade-off along a two-objective front: change of objective 2 per unit change of objective 1.
+
+    The solutions are sorted by objective 1 and split into groups of neighbouring solutions (default: about six
+    solutions per group, 2 to 12 groups); the rate is computed between the group means. Neighbouring solutions with
+    almost equal objective values would otherwise give very noisy rates."""
     f1, f2 = np.asarray(f1, float), np.asarray(f2, float)
     o = np.argsort(f1)
     f1, f2 = f1[o], f2[o]
-    d1 = np.diff(f1)
+    k = groups or int(np.clip(len(f1) // 6, 2, 12))
+    parts = [g for g in np.array_split(np.arange(len(f1)), min(k, len(f1))) if len(g)]
+    m1 = np.array([f1[g].mean() for g in parts])
+    m2 = np.array([f2[g].mean() for g in parts])
+    d1 = np.diff(m1)
     with np.errstate(divide="ignore", invalid="ignore"):
-        rate = np.where(np.abs(d1) > 1e-12, np.diff(f2) / d1, np.nan)
-    return (f1[:-1] + f1[1:]) / 2, rate
+        rate = np.where(np.abs(d1) > 1e-12, np.diff(m2) / d1, np.nan)
+    return (m1[:-1] + m1[1:]) / 2, rate
 
 
 # ------------------------------------------------------------------ standardized regression coefficients

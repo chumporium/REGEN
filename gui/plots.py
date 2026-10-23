@@ -110,8 +110,9 @@ def draw_diagnostics(fig, fit, run):
     _limit_lines(ax, fit)
     ax.set_title("Residuals vs Predicted")
     fam = getattr(fit, "family", None)
+    tr = getattr(fit, "transform", None) and fit.transform.get("kind", "none") != "none"
     ax.set_xlabel(f"Linear predictor ({'logit' if fam == 'binomial' else 'log'} scale)"
-                  if fam in ("binomial", "poisson") else "Predicted")
+                  if fam in ("binomial", "poisson") else "Predicted" + (" (transformed scale)" if tr else ""))
     ax.set_ylabel("Ext. studentized residuals")
 
     o = np.argsort(run)
@@ -760,6 +761,15 @@ def draw_cube(fig, project, fit, axes3, base, resp_label):
                 x2, y2, _ = corners[tuple(nb)]
                 ax.plot([x, x2], [y, y2], color="#555", lw=1.2)
     vals = np.array([v for _, _, v in corners.values()])
+    pts = np.array([base] * len(corners), float)
+    pts[:, [i, j, k]] = np.array(list(corners.keys()), float)
+    act = project.to_actual(pts)
+    cols = {project.factor_label(q): act[:, q] for q in (i, j, k)}
+    cols[f"Predicted {resp_label}"] = vals
+    others = [q for q in range(project.k) if q not in (i, j, k)]
+    fixed = ", ".join(f"{project.factor_label(q)} = {project.format_value(q, project.factor_to_actual(q, base[q]), 4)}"
+                      for q in others)
+    plotdata.register_columns(ax, "Cube corners" + (f" ({fixed})" if fixed else ""), cols, only=True)
     norm = (vals - vals.min()) / (np.ptp(vals) or 1)
     for ((a, b, c), (x, y, v)), nv in zip(corners.items(), norm):
         ax.scatter([x], [y], s=900, color=cm.viridis(nv), edgecolor="k", zorder=3)
@@ -784,10 +794,13 @@ def draw_perturbation(fig, project, fit, base, resp_label):
     g = np.linspace(-1, 1, 81)
     for n, i in enumerate(project.num_idx):
         pts = np.tile(base, (g.size, 1))
+        # mixture: move the component away from the reference blend; process factor: run over its whole range
+        # (-1 to +1), plotted as the deviation from its reference value
         pts[:, i] = base[i] + g if project.is_mixture else g
+        dev = g if project.is_mixture else g - base[i]
         col = COLORS[n % len(COLORS)]
-        ax.plot(g, fit.predict(pts), lw=2, color=col, label=project.factor_label(i))
-        ax.annotate(designs.LETTERS[i], (1, fit.predict(pts[-1:])[0]), color=col, fontweight="bold",
+        ax.plot(dev, fit.predict(pts), lw=2, color=col, label=project.factor_label(i))
+        ax.annotate(designs.LETTERS[i], (dev[-1], fit.predict(pts[-1:])[0]), color=col, fontweight="bold",
                     xytext=(4, 0), textcoords="offset points")
     ax.axvline(0, color="#888", lw=0.8)
     ref = ", ".join(f"{project.factors[i].name}={project.format_value(i, project.factor_to_actual(i, base[i]), 4)}"
