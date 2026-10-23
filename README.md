@@ -134,10 +134,11 @@ Engineering, Universitas Indonesia, Depok, Indonesia.
 
 ## How to cite
 
-Munandar, E., and Nasruddin. 2026. REGEN: Response Engineering with GEnetic algorithms and Neural networks,
-version 7.0.0. Zenodo. https://doi.org/10.5281/zenodo.22944177
+Munandar, E., and Nasruddin. 2026. REGEN: Response Engineering with GEnetic algorithms and Neural networks.
+Zenodo. https://doi.org/10.5281/zenodo.22944176
 
-The DOI 10.5281/zenodo.22944176 always resolves to the latest version. Citation metadata is also available in
+This DOI always resolves to the latest version; cite the DOI of a specific version when your results depend on
+it (for example 7.0.0: https://doi.org/10.5281/zenodo.22944177; 7.1.0: https://doi.org/10.5281/zenodo.23599148). Citation metadata is also available in
 `CITATION.cff` (GitHub: *Cite this repository*).
 
 ## License

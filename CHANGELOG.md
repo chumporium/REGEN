@@ -2,7 +2,11 @@
 
 Versions 1 to 6 were developed under the name DOE Studio.
 
-## Unreleased
+## 7.1.1
+- Model Graphs: overlay and desirability graphs work with preset goals whose limits are not set yet.
+- NSGA: the convergence note names the criterion that is not met (hypervolume change or ideal-point shift).
+- Readable labels in the objective matrix, parallel coordinates, Sobol and trade-off plots; the parametric study keeps readable panels and scrolls.
+- User manual: the multi-objective case studies, including a full walk-through of the polygeneration plant.
 - Four multi-objective case studies: biodiesel production (face-centered CCD, 4 objectives), CNC turning (60 historical runs, 3 nonlinear objectives for the ANN), concrete mix paste (constrained mixture, 3 objectives) and a polygeneration plant (80 simulated runs, 5 decision variables, 3 objectives). Their optimization goals are preset.
 
 ## 7.1.0
