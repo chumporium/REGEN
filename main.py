@@ -224,6 +224,14 @@ def self_test(out_dir):
         lines.append(f"parallel: architecture {s2['best']} ({s2['workers']} cores) = 1 core, parallel restarts "
                      f"{mp1.workers} cores; NSGA-III {r3['gens_run']} generations ({r3['stop_reason'] or 'max'}); "
                      f"test HV {hv:.3f}; ANN vs RSM difference {cmp['diff'][0]['mean']:.1f}% OK")
+        from doe import sensitivity
+        sp = sample_project()
+        sob = sensitivity.sobol(sp, np.zeros(sp.k), n=1024, n_boot=20)["results"][0]
+        src = sensitivity.regression_significance(sp, np.zeros(sp.k), n=120)["results"][0]
+        tor = sensitivity.tornado(sp, np.zeros(sp.k))["results"][0]
+        assert np.all(sob["ST"] >= -0.05) and len(src["beta"]) == sp.k and len(tor) == sp.k
+        lines.append(f"sensitivity: Sobol ST {np.round(sob['ST'], 2).tolist()}, beta "
+                     f"{[round(b, 2) for b in src['beta']]} (R2 {src['r2']:.2f}) OK")
         with open(log, "w", encoding="utf-8") as fh:
             fh.write("\n".join(lines) + "\nSELFTEST OK\n")
         return 0

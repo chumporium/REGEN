@@ -3,6 +3,18 @@
 Versions 1 to 6 were developed under the name DOE Studio.
 
 ## Unreleased
+Sensitivity & Parametric Study (new page under Optimization)
+- Reference point: design center, best desirability solution, NSGA TOPSIS choice or knee point, or custom
+  values; model: the selected model of each response, RSM or ANN.
+- Parametric study: every factor varied over its range in its own panel, all responses on separate vertical axes;
+  or one factor with curves for a second factor, one panel per response.
+- Global sensitivity: standardized regression coefficients β with p-values from a Latin hypercube sample (F-test
+  for categoric factors with more than two levels, R² of the linear regression), or Sobol indices S1 and ST
+  (Saltelli et al. 2010 and Jansen 1999 estimators) with bootstrap intervals.
+- Local sensitivity: tornado chart and normalized sensitivity for ±δ of each factor's range.
+- Pareto front trade-off: Spearman correlation of each factor with each objective along the front, correlation
+  between the objectives, factor values along the front and the trade-off rate for two objectives.
+
 Data export
 - Every plot has "Copy data" and "Export data..." (toolbar and right-click): the data behind each panel are
   written to the clipboard, an Excel workbook (one sheet per series) or a CSV file, so the plot can be redrawn

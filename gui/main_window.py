@@ -22,6 +22,7 @@ from .info_tabs import CoefTableTab, GraphColumnsTab, NotesTab, SummaryTab
 from .new_design_dialog import NewDesignDialog
 from .normalize_tab import NormalizeTab
 from .nsga_tab import NsgaTab
+from .sensitivity_tab import SensitivityTab
 from .optim_tab import OptimTab
 from .predict_tab import PredictTab
 from .readiness_tab import ReadinessTab
@@ -51,6 +52,7 @@ class MainWindow(QMainWindow):
         self.predict_tab = PredictTab()
         self.ann_tab = AnnTab()
         self.nsga_tab = NsgaTab()
+        self.sens_tab = SensitivityTab()
         self.norm_tab = NormalizeTab()
         self.ready_tab = ReadinessTab()
         self.summary_tab = SummaryTab()
@@ -75,6 +77,8 @@ class MainWindow(QMainWindow):
             ("optim", "optim", "Desirability", "Desirability Optimization", "", self.optim_tab, True, "Optimization"),
             ("nsga", "nsga", "NSGA-II / III", "Multi-objective Optimization (NSGA-II / NSGA-III)", "", self.nsga_tab,
              True, "Optimization"),
+            ("sens", "search", "Sensitivity", "Sensitivity & Parametric Study", "", self.sens_tab, True,
+             "Optimization"),
             ("predict", "predict", "Prediction & Confirmation", "Prediction & Confirmation", "", self.predict_tab,
              True, "Optimization"),
             ("norm", "norm", "Data Normalization", "Data Normalization", "", self.norm_tab, True, "Tools"),
@@ -343,7 +347,7 @@ class MainWindow(QMainWindow):
         self.project = project
         for w in (self.data_tab, self.eval_tab, self.analysis_tab, self.graphs_tab, self.optim_tab,
                   self.predict_tab, self.ann_tab, self.nsga_tab, self.norm_tab, self.ready_tab,
-                  self.summary_tab, self.notes_tab, self.gcols_tab, self.coef_tab):
+                  self.summary_tab, self.notes_tab, self.gcols_tab, self.coef_tab, self.sens_tab):
             w.set_project(project)
         self.update_title()
         self.go(page)
@@ -528,6 +532,9 @@ class MainWindow(QMainWindow):
         if ntask is not None and ntask.isRunning():
             ntask.cancel()
             ntask.wait(20000)
+        stask = self.sens_tab.task
+        if stask is not None and stask.isRunning():
+            stask.wait(20000)
         if self.confirm_discard():
             from doe import parallel
             parallel.shutdown()
